@@ -1,7 +1,7 @@
 {
   "name": "wabot-sketch",
   "version": "0.0.1",
-  "description": "",
+  "description": "Incomplete dependency list. Still needed: bullmq, ioredis, @opentelemetry/api, @opentelemetry/sdk-node, etc.",
   "author": "",
   "private": true,
   "license": "UNLICENSED",

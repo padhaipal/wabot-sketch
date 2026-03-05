@@ -19,4 +19,7 @@ await tracer.startActiveSpan("...", async (span) => {
 });
 
 2.) Call wa-handle-ingress.service.ts and send it's return value as the https response to WhatsApp servers. Pass in the HTTPS header X-Hub-Signature-256, the HTTPS header Content-Length, the HTTPS json payload, the trace and span information.
-3.) End the span. 
+3.) End the span.
+
+Observability architecture:
+wabot-sketch and pp-sketch export logs/metrics/traces via OpenTelemetry (OTLP) to a separate Railway service running Grafana Alloy. Alloy forwards everything to Grafana Cloud. The `@opentelemetry/api` imports and `../otel/metrics` module referenced in these prompts assume this OTLP pipeline is configured at app startup.

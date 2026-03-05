@@ -41,16 +41,15 @@ jobDurationMs.record(durationMs, { queue: 'process', jobName: 'message', outcome
           * If I reach the backoff max time cap then log/metrics/span metadata a WARN, mark this job something that will get BullMQ to try again with it’s exponential backoff and terminate the worker/span. 
         * If I get a 4XX response then log/metric/trace metadata an ERROR. Mark the job as failed so BullMQ doesn’t try again. Terminate the worker and span.
 * If `consecutiveMessages[1].length` does not equal zero then PadhaiPal is still processing the user's last message that the WhatsApp bot has received. Still send this message to PadhaiPal (by proceeding as normal by creating a wa-process-message job) but attach a flag to it that it is a consecutive message. (PadhaiPal will probably run a random function that gives a 20% chance of success. Upon success it will send the user a message saying 'Please wait until PadhaiPal has finished thinking'. 
-4.) For every message that gets this far the important information is extracted into a JSON object (wamid, an id that can identify the user (wa_id?), timestamp, type, consecutive status and optionally the media_id). Then send this data to pp in a http request hitting the !!! endpoint. In normal flow PadhaiPal will send a quick 2XX response and then process the request asynchronously. Upon receiving the 2XX response end the worker and the span. (Note the user’s audio isn’t downloaded in this step. If pp wants it, it can request it). 
+4.) For every message that gets this far the important information is extracted into a JSON object (wamid, an id that can identify the user (wa_id?), timestamp, type, consecutive status and optionally the media url). Then send this data to pp in a http request hitting the !!! endpoint. In normal flow PadhaiPal will send a quick 2XX response and then process the request asynchronously. Upon receiving the 2XX response end the worker and the span. (Note the user’s audio isn’t downloaded in this step. If pp wants it, it can request it). 
 * If the call to PadhaiPal fails to get a response within 20s of when the user sent the message then log/metrics/trace metadata a WARN. The reason no retry is attempted is because to do this I would need to add dedupe and rollback functionality in pp for limited benefit. 
   * Use the FALLBACK_VIDEO_URL in wabot.env and the user’s phone number in the json to send a “Sorry, I couldn’t process that message. Please try again. If it keeps failing, it’s okay to come back tomorrow.” default message.
     * If I get a 2XX response then log/metric/trace metadata an INFO and end the worker and span.
     * If I get a 429/5XX response then log/metrics/span metadata a WARN and do exponential backoff for up to 25s after the timestamp in the user’s sent message. 
       * If I reach the backoff max time cap then log/metrics/span metadata a WARN, mark this job something that will get BullMQ to try again with it’s exponential backoff and terminate the worker/span. 
     * If I get a 4XX response then log/metric/trace metadata an ERROR. Mark the job as failed so BullMQ doesn’t try again. Terminate the worker and span.
-  * If the call to PadhaiPal is a 5XX, a 408, a 425 or a 429 response then log/metric/trace metadata a WARN, capture this in metrics, attach relevant information in the span metadata and do exponential backoff with a 10 second cap.
-    * If the backoff cap is reached then log/metric/trace metadata an ERROR and terminate the job. (Note I think this is wrong because pp assumes no duplicate messages which is what this seems to be. 
-    * Use the FALLBACK_VIDEO_URL in wabot.env and the user’s phone number in the json to send a “Sorry, I couldn’t process that message. Please try again. If it keeps failing, it’s okay to come back tomorrow.” default message.Note that sending this message will reset the counter for consecutive messages.Also note that this the same code as above. 
+  * If the call to PadhaiPal is a 5XX, a 408, a 425 or a 429 response then log/metric/trace metadata an ERROR, capture this in metrics and attach relevant information in the span metadata.
+    * Use the FALLBACK_VIDEO_URL in wabot.env and the user’s phone number in the json to send a “Sorry, I couldn’t process that message. Please try again. If it keeps failing, it’s okay to come back tomorrow.” default message. Note that sending this message will reset the counter for consecutive messages. Also note that this similar code to that written above. 
       * If I get a 2XX response then log/metric/trace metadata an INFO and end the worker and span.
       * If I get a 429/5XX response then log/metrics/span metadata a WARN and do exponential backoff for up to 25s after the timestamp in the user’s sent message. 
         * If I reach the backoff max time cap then log/metrics/span metadata a WARN, mark this job something that will get BullMQ to try again with it’s exponential backoff and terminate the worker/span. 
@@ -77,7 +76,7 @@ A suggested datashape to pass into PadhaiPal
   "messageId": "<WHATSAPP_MESSAGE_ID>",
   "timestamp": "<WEBHOOK_TRIGGER_TIMESTAMP>",
   "type": "XXX",
-  "mediaURL": "<MEDIA_ASSET_URL>", // Optional (text messages won't have this. 
+  "mediaUrl": "<MEDIA_ASSET_URL>", // Optional. Only the url, not the media id.
   "textBody": "<MESSAGE_TEXT_BODY>",
   "errors": [ // Optional
     {
