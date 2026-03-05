@@ -1,13 +1,13 @@
 1.) Validate the X-Hub-Signature-256 by using the META_APP_SECRET environment variable stored in .env
-* If signature is invalid return a 401 and log a WARN. 
+* If signature is invalid return `{ status: 401 }` to the controller and log a WARN. 
 * Else continue.
 2.) Then queue a `webhook` job on the `ingest` queue with BullMQ using AOF Redis. The BullMQ prefix is `{wabot:${ENV}}:bullmq`. The job should contain the HTTPS json payload and the trace/span information.
 * If BullMQ gives confirmation of enqueuing success then stop processing.
 * If BullMQ fails confirmation then log a WARN and start exponential backoff retry attempts for 10 seconds.
-  * If the max time cap is hit then log/metrics/trace metadata an ERROR and return a 500 response to WhatsApp so that they try again.
+  * If the max time cap is hit then log/metrics/trace metadata an ERROR and return `{ status: 500 }` to the controller so that WhatsApp receives a 5XX and retries.
 * Else continue
-3.) Return a 2XX OK HTTPS response and log an INFO. 
-4.) End the worker and span. 
+3.) Return `{ status: 200 }` to the controller and log an INFO. The controller translates this into the HTTPS response sent to WhatsApp.
+4.) End the span. 
 
 Notes: 
 I was initially skeptical of using an in memory datastore for storing queue data but after a conversation with ChatGPT I'm convinced that this is fine. The architects of BullMQ obviously know a lot more about queuing than I do and they came to the same conclusion. 

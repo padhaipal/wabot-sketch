@@ -1,4 +1,4 @@
-0.) Start a span
+0.) Start a child span under `wabot.process`. The span name will be `wabot.process.message`.
 1.) I will dedupe messages by attempting to write the message's wamid (WhatsApp Message ID) to the dedupe namespace with `SET "{wabot:${ENV}}:dedupe:wamid:<wamid>" 1 NX`. The `NX` means if the key already exists don't override it but instead return `nil`. Make the TTL 7 days. Record metrics about dedupe hits and misses using code similar to that below. 
 * If the call to Redis fails then log a WARN and do exponential backoff with a 10 second cap logging a WARN for every failed attempt.
   * If the backoff cap is reached then log an ERROR and terminate the job. 

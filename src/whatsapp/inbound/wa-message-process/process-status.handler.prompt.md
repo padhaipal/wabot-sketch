@@ -1,3 +1,4 @@
+0.) Start a child span under `wabot.process`. The span name will be `wabot.process.status`.
 1.) If the `value.statuses.status` equals either `sent` or `read` it can be ignored and terminate the worker. 
 2.) If the `value.statuses.status` equals `delivered` then delete all keys that start with `{wabot:${ENV}}:inflight:wa_id:<wa_id>` in Redis where wa_id (XXX) is equal to `value.statuses[x].recipient_id`. Here is an example command (though you wouldn't use this terminal command but the application code equivalent) `redis-cli --scan --pattern '{wabot:${ENV}}:inflight:wa_id:XXX*' | xargs -r redis-cli UNLINK`. PadhaiPal has now responded to the user so we don't need to block consecutive user messages anymore. 
 
