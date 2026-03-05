@@ -3,7 +3,7 @@
 * Else continue.
 2.) Then queue a `webhook` job on the `ingest` queue with BullMQ using AOF Redis. The BullMQ prefix is `{wabot:${ENV}}:bullmq`. The job should contain the HTTPS json payload and the trace/span information.
 * If BullMQ gives confirmation of enqueuing success then stop processing.
-* If BullMQ fails confirmation then log a WARN and start exponential backoff retry attempts for 25 seconds.
+* If BullMQ fails confirmation then log a WARN and start exponential backoff retry attempts for 10 seconds.
   * If the max time cap is hit then log/metrics/trace metadata an ERROR and return a 500 response to WhatsApp so that they try again.
 * Else continue
 3.) Return a 2XX OK HTTPS response and log an INFO. 
