@@ -18,5 +18,5 @@ await tracer.startActiveSpan("...", async (span) => {
   }
 });
 
-2.) Call wa_handle_ingress.service.ts and send it’s return value as the https response to WhatsApp servers. Pass in the HTTPS header X-Hub-Signature-256, the HTTPS header Content-Length, the HTTPS json payload, the trace and span information.
+2.) Call wa-handle-ingress.service.ts and send it's return value as the https response to WhatsApp servers. Pass in the HTTPS header X-Hub-Signature-256, the HTTPS header Content-Length, the HTTPS json payload, the trace and span information.
 3.) End the span. 
