@@ -1,11 +1,12 @@
 1.) Validate the X-Hub-Signature-256 by using the META_APP_SECRET environment variable stored in .env
-If signature is invalid return a 401 and log a WARN. 
-Else continue.
-2.) Return a 2XX OK HTTPS response and log an INFO. 
-3.) Then queue a `webhook` job on the `ingest` queue with BullMQ using AOF Redis. The BullMQ prefix is `{wabot:${ENV}}:bullmq`. The job should contain the HTTPS json payload and the trace/span information.
+* If signature is invalid return a 401 and log a WARN. 
+* Else continue.
+2.) Then queue a `webhook` job on the `ingest` queue with BullMQ using AOF Redis. The BullMQ prefix is `{wabot:${ENV}}:bullmq`. The job should contain the HTTPS json payload and the trace/span information.
 * If BullMQ gives confirmation of enqueuing success then stop processing.
-* If BullMQ fails confirmation then log a WARN and start exponential backoff retry attempts for 24 hours.
-  * If the max time cap is hit then log/metrics/trace metadata an ERROR
+* If BullMQ fails confirmation then log a WARN and start exponential backoff retry attempts for 25 seconds.
+  * If the max time cap is hit then log/metrics/trace metadata an ERROR and return a 500 response to WhatsApp so that they try again.
+* Else continue
+3.) Return a 2XX OK HTTPS response and log an INFO. 
 4.) End the worker and span. 
 
 Notes: 

@@ -13,7 +13,7 @@ export const dedupeHits = meter.createCounter('wabot_dedupe_hits_total');
 export const dedupeMisses = meter.createCounter('wabot_dedupe_misses_total');
 export const jobDurationMs = meter.createHistogram('wabot_job_duration_ms');
 
-dedupeHits.add(1, { stage: 'wa_message_process', jobName: 'process:message' });
+dedupeHits.add(1, { stage: 'wa_message_process', jobName: 'message' });
 jobDurationMs.record(durationMs, { queue: 'process', jobName: 'message', outcome: 'success' });
 
 
@@ -48,18 +48,18 @@ jobDurationMs.record(durationMs, { queue: 'process', jobName: 'message', outcome
     * If I get a 429/5XX response then log/metrics/span metadata a WARN and do exponential backoff for up to 25s after the timestamp in the user’s sent message. 
       * If I reach the backoff max time cap then log/metrics/span metadata a WARN, mark this job something that will get BullMQ to try again with it’s exponential backoff and terminate the worker/span. 
     * If I get a 4XX response then log/metric/trace metadata an ERROR. Mark the job as failed so BullMQ doesn’t try again. Terminate the worker and span.
-  * If the call to PadhaiPal is a 5XX, a 408, a 425 or a 429 response then log/metric/trace metadata an ERROR, capture this in metrics and attach relevant information in the span metadata.
-    * Use the FALLBACK_VIDEO_URL in wabot.env and the user’s phone number in the json to send a “Sorry, I couldn’t process that message. Please try again. If it keeps failing, it’s okay to come back tomorrow.” default message. Note that sending this message will reset the counter for consecutive messages. Also note that this similar code to that written above. 
-      * If I get a 2XX response then log/metric/trace metadata an INFO and end the worker and span.
-      * If I get a 429/5XX response then log/metrics/span metadata a WARN and do exponential backoff for up to 25s after the timestamp in the user’s sent message. 
-        * If I reach the backoff max time cap then log/metrics/span metadata a WARN, mark this job something that will get BullMQ to try again with it’s exponential backoff and terminate the worker/span. 
-      * If I get a 4XX response then log/metric/trace metadata an ERROR. Mark the job as failed so BullMQ doesn’t try again. Terminate the worker and span.
-  * If the call to PadhaiPal is a different 4XX or 3XX response then log an ERROR, capture this in metrics, attach relevant information in the span metadata.
-    * Use the FALLBACK_VIDEO_URL in wabot.env and the user’s phone number in the json to send a “Sorry, I couldn’t process that message. Please try again tomorrow.” default message.Note that sending this message will reset the counter for consecutive messages.Also note that this the same code as above. 
-      * If I get a 2XX response then log/metric/trace metadata an INFO and end the worker and span.
-      * If I get a 429/5XX response then log/metrics/span metadata a WARN and do exponential backoff for up to 25s after the timestamp in the user’s sent message. 
-        * If I reach the backoff max time cap then log/metrics/span metadata a WARN, mark this job something that will get BullMQ to try again with it’s exponential backoff and terminate the worker/span. 
-      * If I get a 4XX response then log/metric/trace metadata an ERROR. Mark the job as failed so BullMQ doesn’t try again. Terminate the worker and span.
+* If the call to PadhaiPal is a 5XX, a 408, a 425 or a 429 response then log/metric/trace metadata an ERROR, capture this in metrics and attach relevant information in the span metadata.
+  * Use the FALLBACK_VIDEO_URL in wabot.env and the user’s phone number in the json to send a “Sorry, I couldn’t process that message. Please try again. If it keeps failing, it’s okay to come back tomorrow.” default message. Note that sending this message will reset the counter for consecutive messages. Also note that this similar code to that written above. 
+    * If I get a 2XX response then log/metric/trace metadata an INFO and end the worker and span.
+    * If I get a 429/5XX response then log/metrics/span metadata a WARN and do exponential backoff for up to 25s after the timestamp in the user’s sent message. 
+      * If I reach the backoff max time cap then log/metrics/span metadata a WARN, mark this job something that will get BullMQ to try again with it’s exponential backoff and terminate the worker/span. 
+    * If I get a 4XX response then log/metric/trace metadata an ERROR. Mark the job as failed so BullMQ doesn’t try again. Terminate the worker and span.
+* If the call to PadhaiPal is a different 4XX or 3XX response then log an ERROR, capture this in metrics, attach relevant information in the span metadata.
+  * Use the FALLBACK_VIDEO_URL in wabot.env and the user’s phone number in the json to send a “Sorry, I couldn’t process that message. Please try again tomorrow.” default message.Note that sending this message will reset the counter for consecutive messages.Also note that this the same code as above. 
+    * If I get a 2XX response then log/metric/trace metadata an INFO and end the worker and span.
+    * If I get a 429/5XX response then log/metrics/span metadata a WARN and do exponential backoff for up to 25s after the timestamp in the user’s sent message. 
+      * If I reach the backoff max time cap then log/metrics/span metadata a WARN, mark this job something that will get BullMQ to try again with it’s exponential backoff and terminate the worker/span. 
+    * If I get a 4XX response then log/metric/trace metadata an ERROR. Mark the job as failed so BullMQ doesn’t try again. Terminate the worker and span.
 Notes
 * We don’t retry in step four, partially because we need to respond quickly to the user and retries would add latency. But mainly because wabot has deduped messages. If wabot sends retries to pp then pp will also have to dedupe messages which adds unnecessary complexity and potential failure modes to the codebase. Also both wabot and pp are hosted in the same railway project and so the network should be far more reliable than sending messages across the wider internet network. 
 
