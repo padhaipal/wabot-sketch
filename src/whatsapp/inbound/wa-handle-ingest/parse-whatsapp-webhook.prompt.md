@@ -29,11 +29,11 @@ Full payload shape below.
                 "timestamp": "<WEBHOOK_TRIGGER_TIMESTAMP>", // Per-item validation. Used in process-message.handler.ts step 4.
                 "type": "audio" | "text" | "video" | "system" | "unsupported", // Per-item validation. These are the ones I will respond to but I will accept any string here.
                 "audio": { // Optional
-                  "mime_type": "<MEDIA_ASSET_MIME_TYPE>", // I don't know if I need this
-                  "sha256": "<MEDIA_ASSET_SHA256_HASH>", // I don't know if I need this
-                  "id": "<MEDIA_ASSET_ID>", // I don't know if I need this
+                  "mime_type": "<MEDIA_ASSET_MIME_TYPE>",
+                  "sha256": "<MEDIA_ASSET_SHA256_HASH>",
+                  "id": "<MEDIA_ASSET_ID>",
                   "url": "<MEDIA_ASSET_URL>", // I do need this.
-                  "voice": <IS_VOICE_RECORDING?> // I don't know if I need this
+                  "voice": <IS_VOICE_RECORDING?>
                 },
                 "text": { // Optional. Obviously you wouldn't get multiple types in one message as is shown here.
                   "body": "<MESSAGE_TEXT_BODY>"
@@ -52,11 +52,11 @@ Full payload shape below.
                 },
                 "errors": [ // Optional key
                   {
-                    "code": 131051, // I don't know if I need this
-                    "title": "Message type unknown", // I don't know if I need this
-                    "message": "Message type unknown", // I don't know if I need this
-                    "error_data": { // I don't know if I need this
-                      "details": "Message type is currently not supported." // I don't know if I need this
+                    "code": 131051,
+                    "title": "Message type unknown",
+                    "message": "Message type unknown",
+                    "error_data": {
+                      "details": "Message type is currently not supported."
                     }
                   }
                 ],

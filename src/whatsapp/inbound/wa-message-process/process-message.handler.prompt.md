@@ -1,5 +1,5 @@
 0.) Start a span
-1.) I will dedupe messages by attempting to write the message's wamid (WhatsApp media id) to the dedupe namespace with `SET "{wabot:${ENV}}:dedupe:wamid:<wamid>" 1 NX`. The `NX` means if the key already exists don't override it but instead return `nil`. Make the TTL 7 days. Record metrics about dedupe hits and misses using code similar to that below. 
+1.) I will dedupe messages by attempting to write the message's wamid (WhatsApp Message ID) to the dedupe namespace with `SET "{wabot:${ENV}}:dedupe:wamid:<wamid>" 1 NX`. The `NX` means if the key already exists don't override it but instead return `nil`. Make the TTL 7 days. Record metrics about dedupe hits and misses using code similar to that below. 
 * If the call to Redis fails then log a WARN and do exponential backoff with a 10 second cap logging a WARN for every failed attempt.
   * If the backoff cap is reached then log an ERROR and terminate the job. 
 * If `nil` is returned then skip over this message (it is a duplicate).
@@ -32,7 +32,7 @@ jobDurationMs.record(durationMs, { queue: 'process', jobName: 'message', outcome
     * If I get a 429/5XX response then log/metrics/span metadata a WARN and do exponential backoff for up to 25s after the timestamp in the user’s sent message. 
       * If I reach the backoff max time cap then log/metrics/span metadata a WARN, mark this job something that will get BullMQ to try again with it’s exponential backoff and terminate the worker/span. 
     * If I get a 4XX response then log/metric/trace metadata an ERROR. Mark the job as failed so BullMQ doesn’t try again. Terminate the worker and span.
-* If `consecutiveMessages[1].length` equals zero then PadhaiPal has responded to the last user's message that the WhatsApp bot has received. I need to create the redis key `{wabot:${ENV}}:inflight:wa_id:<wa_id>:wamid:<wamid>` and then proceed as normal. 
+* If `consecutiveMessages[1].length` equals zero then PadhaiPal has responded to the last user's message that the WhatsApp bot has received. I need to create the redis key `{wabot:${ENV}}:inflight:wa_id:<wa_id>:wamid:<wamid>` with `EX 25` (25s TTL) and then proceed as normal. 
   * If the call to Redis fails then log a WARN, capture this in metrics, attach relevant information in the span metadata and do exponential backoff with a 10 second cap logging a WARN for every failed attempt.
     * If the backoff cap is reached then log an ERROR.
       * Use the FALLBACK_VIDEO_URL in wabot.env and the user’s phone number in the json to send a “Sorry, I couldn’t process that message. Please try again. If it keeps failing, it’s okay to come back tomorrow.” default message.Note that sending this message will reset the counter for consecutive messages.Also note that this the same code as above. 
