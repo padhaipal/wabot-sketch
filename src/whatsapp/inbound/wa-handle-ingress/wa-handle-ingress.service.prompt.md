@@ -4,8 +4,8 @@ Else continue.
 2.) Return a 2XX OK HTTPS response and log an INFO. 
 3.) Then queue a `webhook` job on the `ingest` queue with BullMQ using AOF Redis. The BullMQ prefix is `{wabot:${ENV}}:bullmq`. The job should contain the HTTPS json payload and the trace/span information.
 * If BullMQ gives confirmation of enqueuing success then stop processing.
-* If BullMQ fails confirmation then log a WARN and start exponential backoff retry attempts for 10 seconds.
-  * If the max time second cap is hit then log/metrics/trace metadata an ERROR and !!! send a "Sorry, I couldn't process that message. Please try again. If it keeps failing, it's okay to come back tomorrow." !!!
+* If BullMQ fails confirmation then log a WARN and start exponential backoff retry attempts for 24 hours.
+  * If the max time second cap is hit then log/metrics/trace metadata an ERROR
 4.) End the worker and span. 
 
 Notes: 

@@ -1,5 +1,5 @@
 0.) Start a span
-1.) I will dedupe messages by attempting to write the message's wamid (WhatsApp media id) to the dedupe namespace with `SET mykey "{wabot:${ENV}}:dedupe:wamid:<wamid>" NX`. The `NX` means if the key already exists don't override it but instead return `nil`. Make the TTL 7 days. Record metrics about dedupe hits and misses using code similar to that below. 
+1.) I will dedupe messages by attempting to write the message's wamid (WhatsApp media id) to the dedupe namespace with `SET "{wabot:${ENV}}:dedupe:wamid:<wamid>" 1 NX`. The `NX` means if the key already exists don't override it but instead return `nil`. Make the TTL 7 days. Record metrics about dedupe hits and misses using code similar to that below. 
 * If the call to Redis fails then log a WARN and do exponential backoff with a 10 second cap logging a WARN for every failed attempt.
   * If the backoff cap is reached then log an ERROR and terminate the job. 
 * If `nil` is returned then skip over this message (it is a duplicate).
@@ -13,7 +13,7 @@ export const dedupeHits = meter.createCounter('wabot_dedupe_hits_total');
 export const dedupeMisses = meter.createCounter('wabot_dedupe_misses_total');
 export const jobDurationMs = meter.createHistogram('wabot_job_duration_ms');
 
-dedupeHits.add(1, { stage: 'wa_handle_ingest', jobName: 'process:message' });
+dedupeHits.add(1, { stage: 'wa_message_process', jobName: 'process:message' });
 jobDurationMs.record(durationMs, { queue: 'process', jobName: 'message', outcome: 'success' });
 
 
@@ -76,6 +76,7 @@ A suggested datashape to pass into PadhaiPal
   "messageId": "<WHATSAPP_MESSAGE_ID>",
   "timestamp": "<WEBHOOK_TRIGGER_TIMESTAMP>",
   "type": "XXX",
+  "consecutive": false, // true if inflight messages exist for this user
   "mediaUrl": "<MEDIA_ASSET_URL>", // Optional. Only the url, not the media id.
   "textBody": "<MESSAGE_TEXT_BODY>",
   "errors": [ // Optional
