@@ -18,10 +18,10 @@
   	* return non-consecutive flag
   * If SET fails
   	* return consecutive flag
-7.) src/pp/outbound/outbound.service.ts/sendMessage() !!! I need to define data structure that includes consecutive flag !!!
+7.) src/pp/outbound/outbound.service.ts/sendMessage()
 * If 2XX response then log INFO and mark the job as complete.
 * If 4XX log ERROR and send fall back message then mark the job as failed.
-* If 5XX log WARN and send fall back message then mark the job as failed.
+* If 5XX log ERROR and send fall back message then mark the job as failed.
 
 Notes
 * This is what the process-message-timeout job does when it is executed. This code is defined in this file.
@@ -34,6 +34,3 @@ Notes
 * Non-responsive redis.
   * If redis is non-responsive then log a WARN and retry with exponential backoff with a maximum time cap of 10s. 
     * If that maximum time cap is reached then log an ERROR and send the fall back message (see notes). Pass in a flag that 
-
-
-
