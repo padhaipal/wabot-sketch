@@ -22,3 +22,6 @@ coverage/
 
 # Debug
 npm-debug.log*
+
+# Programmer Quality of Life
+junk.md
