@@ -1,5 +1,5 @@
 sendReadAndTypingIndicator()
-sendWAMessage()
+sendMessage()
 * Before I attempt to send any message there needs to be a check to see if a key containing that user_id exists in the inflight redis namespace. If so then remove the user_id and send the message. If not then block this message from being sent and return 
 When the worker activates it will run `DEL "{wabot:${ENV}}:inflight:<user_id>"` if the key exists then it 
 
@@ -9,14 +9,7 @@ I need to hand the case when redis is non-responsive. If the message is the fall
 
 outbound.service.ts/sendMessage()
 
-sendPPMessage()
-PP_INTERNAL_BASE_URL is available in .env
-Required data structure is in pp/src/inbound/wabot-inbound.dto.ts
-  * if pp returns 2XX then log INFO and return that status. 
-  * if pp returns 4XX then log ERROR and return that status.
-  * if pp returns 5XX then log ERROR and return that status. (Note that I am currently not supporting retries for pp.)
-
-sendWAMessage(user_id, wamid, consecutive-flag, message formatting)
+sendMessage(user_id, wamid, consecutive-flag, message formatting)
 * If the message is flagged as responding to a consecutive message then it is sent and the https response status is returned.
 * Otherwise it attempts the following two commands atomically with a Lua command
   `DEL “{wabot:${ENV}}:inflight:user-id:<user_id>:wamid:<wamid>”` and 

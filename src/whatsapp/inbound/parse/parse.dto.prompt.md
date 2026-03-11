@@ -1,4 +1,4 @@
-// wabot/src/inbound/parse/parse.dto.ts
+// src/whatsapp/inbound/parse/parse.dto.ts
 
 import { Type } from 'class-transformer';
 import {
@@ -7,7 +7,7 @@ import {
   IsString,
   ValidateNested,
 } from 'class-validator';
-import { OtelCarrierDto } from '../../otel/otel.dto';
+import { OtelCarrierDto } from '../../../otel/otel.dto';
 
 export class ParseWebhookChangeDto {
   @IsString()

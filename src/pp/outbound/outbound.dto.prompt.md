@@ -1,5 +1,9 @@
+// src/pp/outbound/outbound.dto.ts
+// Data structure for sendMessage() - payload sent to PP. PP receives at pp-sketch/src/wabot/inbound/wabot-inbound.dto.prompt.md
+
 import { Type } from 'class-transformer';
 import {
+  IsBoolean,
   IsObject,
   IsOptional,
   IsString,
@@ -9,7 +13,7 @@ import {
   ValidatorConstraintInterface,
   ValidationArguments,
 } from 'class-validator';
-import { OtelCarrierDto } from '../../../otel/otel.dto';
+import { OtelCarrierDto } from '../../otel/otel.dto';
 
 @ValidatorConstraint({ name: 'exactlyOneOfAudioTextVideoSystem', async: false })
 class ExactlyOneOfAudioTextVideoSystemConstraint
@@ -83,4 +87,8 @@ export class MessageJobDto {
   @ValidateNested()
   @Type(() => MessageDto)
   message!: MessageDto;
+
+  @IsOptional()
+  @IsBoolean()
+  consecutive?: boolean;
 }
