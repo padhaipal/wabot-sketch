@@ -1,16 +1,27 @@
 sendReadAndTypingIndicator()
 
-sendMessage(user_id, wamid, consecutive-flag, message formatting)
-* If the message is flagged as responding to a consecutive message then it is sent and the https response status is returned.
-* Otherwise it attempts the following two commands atomically with a Lua command
+sendMessage(user_id: string, wamid: string, consecutive: boolean | undefined, media: OutboundMediaItemDto[])
+
+Sends an ordered list of media items to a student via the WhatsApp Cloud API. Each item becomes a separate WhatsApp API call, sent sequentially in the order provided.
+
+* If the message is flagged as consecutive then skip the Redis inflight check — go straight to sending the messages to WhatsApp and return the result using the `{ delivered: true/false }` shape.
+* Otherwise, attempt the following two DEL commands atomically with a Lua script:
   `DEL "{wabot:${ENV}}:inflight:user-id:<user_id>:wamid:<wamid>"` and 
   `DEL "{wabot:${ENV}}:consecutive-check:user-id:<user_id>"`
-	* if the Lua command succeeds (ie both DEL commands return 1) then it will send the message to WhatsApp.
-    * if WhatsApp returns 2XX then log INFO and return that status. 
-    * if WhatsApp returns 4XX then log ERROR and return that status.
-    * if WhatsApp returns 5XX then log WARN then exponential fallback with a max time cap of 5s.
-      * if max time cap is reached then log an ERROR and return the 5XX status
-	* if the Lua command fails (ie both DEL commands return 0) then an INFO is logged and the function returns. 
+	* If the Lua command succeeds (ie both DEL commands return 1) then send the messages to WhatsApp (see below).
+	* If the Lua command fails (ie both DEL commands return 0) then log INFO and return 200 with body `{ delivered: false, reason: "inflight-expired" }`. The inflight window was consumed by the timeout job, meaning the fallback message was already sent to the student.
+
+Sending messages to WhatsApp:
+* Iterate over the `media` array in order. For each item, send one WhatsApp Cloud API message:
+  * `type: 'text'` → POST message with `type: "text"`, `text: { body: item.body }`.
+  * `type: 'audio'` → POST message with `type: "audio"`, `audio: { link: item.url }`.
+  * `type: 'video'` → POST message with `type: "video"`, `video: { link: item.url }`.
+  * `type: 'image'` → POST message with `type: "image"`, `image: { link: item.url }`.
+  * Reference: https://developers.facebook.com/docs/whatsapp/cloud-api/reference/messages
+* If WhatsApp returns 2XX for all items then log INFO and return 200 with body `{ delivered: true }`.
+* If WhatsApp returns 4XX for any item then log ERROR and return that 4XX status immediately (do not send remaining items).
+* If WhatsApp returns 5XX for any item then retry that item with exponential backoff, max time cap of 5s.
+  * If max time cap is reached then log ERROR and return the 5XX status (do not send remaining items).
 
 downloadMedia(media_url: string): Promise<{ stream: NodeJS.ReadableStream, content_type: string }>
 WHATSAPP_ACCESS_TOKEN is available in .env.

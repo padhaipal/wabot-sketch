@@ -1,10 +1,16 @@
 sendMessage()
-// todo: describe the dto which will be controlled by wabot-sketch/src/whatsapp/outbound/outbound.dto.ts which in turn is controlled by whatsapp documentation.
-1.) Check the http message data structure against inbound.dto.ts. 
-* If the check fails then return a 400 response.
-2.) Use the message payload to start a span.
-3.) Call src/whatsapp/outbound/outbound.service.ts/sendMessage().
-4.) Return to pp whatever sendMessage() returns and end the span. 
+1.) Validate the request body against `SendMessageDto` from inbound.dto.ts.
+* If validation fails then return a 400 response.
+2.) Extract the OTel carrier from the request body and start a span.
+3.) Call src/whatsapp/outbound/outbound.service.ts/sendMessage() with:
+  * user_id: body.user_external_id
+  * wamid: body.wamid
+  * consecutive: body.consecutive
+  * media: body.media (the ordered array of OutboundMediaItemDto)
+4.) Return to pp whatever sendMessage() returns and end the span. sendMessage() returns either:
+  * 200 `{ delivered: true }` — all messages were sent to WhatsApp.
+  * 200 `{ delivered: false, reason: "inflight-expired" }` — inflight window expired, fallback was already sent.
+  * 4XX/5XX — WhatsApp error (passed through as-is).
 
 downloadMedia()
 1.) Check the http request body against src/pp/inbound/inbound.dto.ts DownloadMediaDto.
