@@ -12,7 +12,7 @@ Sends an ordered list of media items to a student via the WhatsApp Cloud API. Ea
 	* If the Lua command fails (ie both DEL commands return 0) then log INFO and return 200 with body `{ delivered: false, reason: "inflight-expired" }`. The inflight window was consumed by the timeout job, meaning the fallback message was already sent to the student.
 
 Sending messages to WhatsApp:
-* Iterate over the `media` array in order. For each item, send one WhatsApp Cloud API message:
+* Iterate over the `media` array in order. For each item, send one WhatsApp Cloud API message and wait for the HTTP response before sending the next item:
   * `type: 'text'` → POST message with `type: "text"`, `text: { body: item.body }`.
   * `type: 'audio'` → POST message with `type: "audio"`, `audio: { link: item.url }`.
   * `type: 'video'` → POST message with `type: "video"`, `video: { link: item.url }`.

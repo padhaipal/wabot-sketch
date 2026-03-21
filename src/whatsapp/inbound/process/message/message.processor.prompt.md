@@ -12,9 +12,9 @@
 * if fail to enqueue then log a WARN and exponentially backoff for 10s.
   * if backoff fails then log an ERROR and fail the job.
 6.) Run a Lua command that atomically executes the following
-* SET “{wabot:${ENV}}:consecutive-check:user-id:<user_id>” NX EX XXX
+* SET “{wabot:${ENV}}:consecutive-check:user-id:<user_id>” NX EX 25
   * If SET succeeds
-  	* SET “{wabot:${ENV}}:inflight:user-id:<user_id>:wamid:<wamid>” EX XXX
+  	* SET “{wabot:${ENV}}:inflight:user-id:<user_id>:wamid:<wamid>” EX 25
   	* return non-consecutive flag
   * If SET fails
   	* return consecutive flag
@@ -33,4 +33,4 @@ Notes
 
 * Non-responsive redis.
   * If redis is non-responsive then log a WARN and retry with exponential backoff with a maximum time cap of 10s. 
-    * If that maximum time cap is reached then log an ERROR and send the fall back message (see notes). Pass in a flag that 
+    * If that maximum time cap is reached then log an ERROR and send the fall back message (see notes).
