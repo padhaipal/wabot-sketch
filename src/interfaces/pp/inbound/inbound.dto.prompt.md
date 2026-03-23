@@ -1,8 +1,8 @@
-// wabot-sketch/src/pp/inbound/inbound.dto.prompt.md
+// wabot-sketch/src/interfaces/pp/inbound/inbound.dto.prompt.md
 
 import { IsString, IsBoolean, IsOptional, IsArray, IsIn, ValidateNested, IsDefined, ValidateIf, ArrayMinSize } from 'class-validator';
 import { Type } from 'class-transformer';
-import { OtelCarrierDto } from '../../otel/otel.dto';
+import { OtelCarrierDto } from '../../../otel/otel.dto';
 
 // --- SendMessage DTO ---
 

@@ -1,4 +1,4 @@
-// wabot-sketch/src/redis/queues.prompt.md
+// wabot-sketch/src/interfaces/redis/queues.prompt.md
 
 Export queue names, Redis connection, and Queue/Worker factories.
 

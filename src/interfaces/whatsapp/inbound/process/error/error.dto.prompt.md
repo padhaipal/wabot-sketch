@@ -1,6 +1,6 @@
 import { Type } from 'class-transformer';
 import { IsInt, IsString, ValidateNested } from 'class-validator';
-import { OtelCarrierDto } from '../../../../otel/otel.dto';
+import { OtelCarrierDto } from '../../../../../otel/otel.dto';
 
 export class ErrorDataDto {
   @IsString()

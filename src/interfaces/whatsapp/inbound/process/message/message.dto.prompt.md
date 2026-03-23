@@ -1,4 +1,4 @@
-// wabot-sketch/src/whatsapp/inbound/process/message/message.dto.prompt.md
+// wabot-sketch/src/interfaces/whatsapp/inbound/process/message/message.dto.prompt.md
 
 import { Type } from 'class-transformer';
 import {
@@ -10,7 +10,7 @@ import {
   ValidatorConstraintInterface,
   ValidationArguments,
 } from 'class-validator';
-import { OtelCarrierDto } from '../../../../otel/otel.dto';
+import { OtelCarrierDto } from '../../../../../otel/otel.dto';
 
 @ValidatorConstraint({ name: 'typeMatchesPayload', async: false })
 class TypeMatchesPayloadConstraint implements ValidatorConstraintInterface {

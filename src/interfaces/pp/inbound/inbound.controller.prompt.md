@@ -2,7 +2,7 @@ sendMessage()
 1.) Validate the request body against `SendMessageDto` from inbound.dto.ts.
 * If validation fails then return a 400 response.
 2.) Extract the OTel carrier from the request body and start a span.
-3.) Call src/whatsapp/outbound/outbound.service.ts/sendMessage() with:
+3.) Call src/interfaces/whatsapp/outbound/outbound.service.ts/sendMessage() with:
   * user_id: body.user_external_id
   * wamid: body.wamid
   * consecutive: body.consecutive
@@ -13,10 +13,10 @@ sendMessage()
   * 4XX/5XX — WhatsApp error (passed through as-is).
 
 downloadMedia()
-1.) Check the http request body against src/pp/inbound/inbound.dto.ts DownloadMediaDto.
+1.) Check the http request body against src/interfaces/pp/inbound/inbound.dto.ts DownloadMediaDto.
 * If the check fails then return a 400 response.
 2.) Extract the OTel carrier from the request body and start a span.
-3.) Call src/whatsapp/outbound/outbound.service.ts/downloadMedia(body.media_url).
+3.) Call src/interfaces/whatsapp/outbound/outbound.service.ts/downloadMedia(body.media_url).
 4.) Set the response content-type header to the returned content_type. Pipe the returned readable stream directly into the HTTP response body.
 5.) End the span when the stream finishes.
 * If downloadMedia() throws or the stream errors: log WARN, end the span and return 502.
@@ -26,6 +26,6 @@ uploadMedia()
 2.) Read the Content-Type header (media mime type, e.g. "audio/mpeg") and X-Media-Type header (WhatsApp media type: "audio", "video", or "image").
     * If either header is missing: return a 400 response.
 3.) Extract the OTel carrier from the ?otel= query param (JSON-parsed) and start a span.
-4.) Call src/whatsapp/outbound/outbound.service.ts/uploadMedia(buffer, content_type, media_type).
+4.) Call src/interfaces/whatsapp/outbound/outbound.service.ts/uploadMedia(buffer, content_type, media_type).
 5.) On success: return 200 with JSON body { wa_media_url: <returned media ID> }. End the span.
 * If uploadMedia() throws: log the error, end the span, and return the appropriate status (4XX or 5XX pass-through from WhatsApp).

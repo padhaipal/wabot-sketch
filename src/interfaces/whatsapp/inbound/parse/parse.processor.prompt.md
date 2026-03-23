@@ -6,9 +6,9 @@
 * Else continue.
 4.) Flatten `entry[].changes[]`
 * If `.changes[].value` doesn't have a key `'messages'`, `'status'` or `'error'` then skip it. 
-* If `.changes[].value.messages` exists then check it's data shape against src/whatsapp/inbound/process/message/message.dto.ts and/or src/whatsapp/inbound/process/message/message.dto.prompt.md.
-* If `.changes[].value.statuses` exists then check it's data shape against src/whatsapp/inbound/process/status/status.dto.ts and/or src/whatsapp/inbound/process/status/status.dto.prompt.md.
-* If `.changes[].value.errors` exists then check it's data shape against src/whatsapp/inbound/process/error/error.dto.ts and/or src/whatsapp/inbound/process/error/error.dto.prompt.md.
+* If `.changes[].value.messages` exists then check it's data shape against src/interfaces/whatsapp/inbound/process/message/message.dto.ts and/or src/interfaces/whatsapp/inbound/process/message/message.dto.prompt.md.
+* If `.changes[].value.statuses` exists then check it's data shape against src/interfaces/whatsapp/inbound/process/status/status.dto.ts and/or src/interfaces/whatsapp/inbound/process/status/status.dto.prompt.md.
+* If `.changes[].value.errors` exists then check it's data shape against src/interfaces/whatsapp/inbound/process/error/error.dto.ts and/or src/interfaces/whatsapp/inbound/process/error/error.dto.prompt.md.
 5.) Build three arrays of process jobs: one for messages, one for statuses and one for errors.
 6.) call three `queue.addBulk(jobs)`: messages go to `process-message` queue, statuses go to `process-status` queue and errors go to `process-errors` queue. 
 * If the message bulk add fails then log a WARN and retry with exponential backoff with a max time cap of 10s. 

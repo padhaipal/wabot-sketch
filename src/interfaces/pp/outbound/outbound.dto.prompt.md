@@ -1,4 +1,4 @@
-// wabot-sketch/src/pp/outbound/outbound.dto.ts
+// wabot-sketch/src/interfaces/pp/outbound/outbound.dto.ts
 // Data structure for sendMessage() - payload sent to PP. PP receives at pp-sketch/src/interfaces/wabot/inbound/wabot-inbound.dto.prompt.md
 
 import { Type } from 'class-transformer';
@@ -12,7 +12,7 @@ import {
   ValidatorConstraintInterface,
   ValidationArguments,
 } from 'class-validator';
-import { OtelCarrierDto } from '../../otel/otel.dto';
+import { OtelCarrierDto } from '../../../otel/otel.dto';
 
 @ValidatorConstraint({ name: 'typeMatchesPayload', async: false })
 class TypeMatchesPayloadConstraint implements ValidatorConstraintInterface {
