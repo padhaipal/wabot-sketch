@@ -53,3 +53,12 @@ export class DownloadMediaDto {
   @IsString()
   media_url!: string;
 }
+
+// --- UploadMedia ---
+// Unlike SendMessage/DownloadMedia, UploadMedia uses a raw binary body rather than JSON.
+// Metadata is carried in headers and query params instead of the request body.
+// Validation is done manually in the controller (no class-validator DTO for the body).
+
+export class UploadMediaResponseDto {
+  wa_media_url!: string;                   // WhatsApp media ID — use in OutboundMediaItemDto.url to reference the preloaded media
+}

@@ -14,9 +14,9 @@ Sends an ordered list of media items to a student via the WhatsApp Cloud API. Ea
 Sending messages to WhatsApp:
 * Iterate over the `media` array in order. For each item, send one WhatsApp Cloud API message and wait for the HTTP response before sending the next item:
   * `type: 'text'` → POST message with `type: "text"`, `text: { body: item.body }`.
-  * `type: 'audio'` → POST message with `type: "audio"`, `audio: { link: item.url }`.
-  * `type: 'video'` → POST message with `type: "video"`, `video: { link: item.url }`.
-  * `type: 'image'` → POST message with `type: "image"`, `image: { link: item.url }`.
+  * `type: 'audio' | 'video' | 'image'` → POST message with `type: item.type` and the media object keyed by item.type.
+    - If item.url starts with "http": use `{ link: item.url }` (external URL).
+    - Otherwise: treat item.url as a WhatsApp media ID and use `{ id: item.url }` (preloaded media).
   * Reference: https://developers.facebook.com/docs/whatsapp/cloud-api/reference/messages
 * If WhatsApp returns 2XX for all items then log INFO and return 200 with body `{ delivered: true }`.
 * If WhatsApp returns 4XX for any item then log ERROR and return that 4XX status immediately (do not send remaining items).
@@ -30,3 +30,16 @@ Reference: https://developers.facebook.com/docs/whatsapp/cloud-api/reference/med
 * On 2XX: return { stream: response body as a readable stream, content_type: response content-type header value }.
 * On 404: log WARN and throw. Media URL has likely expired (URLs are valid for 5 minutes after the webhook fires).
 * On other non-2XX: log WARN and throw.
+
+uploadMedia(data: Buffer, content_type: string, media_type: string): Promise<{ wa_media_url: string }>
+WHATSAPP_ACCESS_TOKEN and PHONE_NUMBER_ID are available in .env.
+Reference: https://developers.facebook.com/docs/whatsapp/cloud-api/reference/media#upload-media
+* POST to https://graph.facebook.com/v21.0/${PHONE_NUMBER_ID}/media with multipart/form-data:
+  - file: the raw bytes (Buffer) with filename derived from media_type (e.g. "upload.mp3", "upload.mp4")
+  - type: content_type (e.g. "audio/mpeg", "video/mp4")
+  - messaging_product: "whatsapp"
+  Headers: { 'Authorization': `Bearer ${WHATSAPP_ACCESS_TOKEN}` }
+* On 2XX: extract id from response JSON. Return { wa_media_url: id }.
+  The returned id is a WhatsApp media ID valid for 30 days. It can be used in sendMessage via { id: <value> }.
+* On 4XX: log ERROR and throw.
+* On 5XX: log WARN and throw.

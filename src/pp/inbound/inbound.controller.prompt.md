@@ -20,3 +20,12 @@ downloadMedia()
 4.) Set the response content-type header to the returned content_type. Pipe the returned readable stream directly into the HTTP response body.
 5.) End the span when the stream finishes.
 * If downloadMedia() throws or the stream errors: log WARN, end the span and return 502.
+
+uploadMedia()
+1.) Read the raw binary request body as a Buffer.
+2.) Read the Content-Type header (media mime type, e.g. "audio/mpeg") and X-Media-Type header (WhatsApp media type: "audio", "video", or "image").
+    * If either header is missing: return a 400 response.
+3.) Extract the OTel carrier from the ?otel= query param (JSON-parsed) and start a span.
+4.) Call src/whatsapp/outbound/outbound.service.ts/uploadMedia(buffer, content_type, media_type).
+5.) On success: return 200 with JSON body { wa_media_url: <returned media ID> }. End the span.
+* If uploadMedia() throws: log the error, end the span, and return the appropriate status (4XX or 5XX pass-through from WhatsApp).
