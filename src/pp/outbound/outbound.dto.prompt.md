@@ -1,5 +1,5 @@
 // wabot-sketch/src/pp/outbound/outbound.dto.ts
-// Data structure for sendMessage() - payload sent to PP. PP receives at pp-sketch/src/wabot/inbound/wabot-inbound.dto.prompt.md
+// Data structure for sendMessage() - payload sent to PP. PP receives at pp-sketch/src/interfaces/wabot/inbound/wabot-inbound.dto.prompt.md
 
 import { Type } from 'class-transformer';
 import {
