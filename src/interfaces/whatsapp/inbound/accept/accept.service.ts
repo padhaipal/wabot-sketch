@@ -10,9 +10,7 @@ export class AcceptService {
     rawBody: Buffer,
   ): boolean {
     if (typeof signatureHeader !== 'string' || !Buffer.isBuffer(rawBody)) {
-      this.logger.warn(
-        'isValidSignature(): invalid parameter data type.',
-      );
+      this.logger.warn('isValidSignature(): invalid parameter data type.');
       return false;
     }
 
@@ -23,6 +21,17 @@ export class AcceptService {
     }
 
     return this.validateSignature(signatureHeader, rawBody, appSecret);
+  }
+
+  logDecryptedPayload(body: unknown): void {
+    try {
+      const json = JSON.stringify(body, null, 2);
+      this.logger.log(`Decrypted webhook payload: ${json}`);
+    } catch {
+      this.logger.warn(
+        'Decrypted webhook payload: [unserializable]',
+      );
+    }
   }
 
   private validateSignature(
@@ -48,6 +57,7 @@ export class AcceptService {
 
     const expected = Buffer.from(expectedHex, 'hex');
     const received = Buffer.from(receivedHex, 'hex');
+
     if (expected.length !== received.length) {
       this.logger.warn('X-Hub-Signature-256 validation failed.');
       return false;
