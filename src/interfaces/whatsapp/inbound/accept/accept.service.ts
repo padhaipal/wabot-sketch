@@ -1,3 +1,4 @@
+// wabot-sketch/src/interfaces/whatsapp/inbound/accept/accept.service.ts
 import { Injectable, Logger } from '@nestjs/common';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
