@@ -28,7 +28,7 @@ Notes
   * it runs src/interfaces/whatsapp/outbound/outbound.service.ts/sendMessage() with FALL_BACK_MESSAGE_EXTERNAL_ID
 
 
-* Send fall back message. Call src/interfaces/whatsapp/outbound/outbound.service.ts/sendMessage() with .env variabl FALL_BACK_MESSAGE_EXTERNAL_ID. Note that sendMessage() handles retries on 5XX. 
+* Send fall back message. Call src/interfaces/whatsapp/outbound/outbound.service.ts/sendMessage() with .env variable FALL_BACK_MESSAGE_EXTERNAL_ID. Note that sendMessage() handles retries on 5XX. Wait for response from sendMessage() log that response and complete the job and span.
 
 
 * Non-responsive redis.
