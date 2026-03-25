@@ -8,10 +8,6 @@ import { PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
 import { NodeSDK } from '@opentelemetry/sdk-node';
 
 const diagLevelMap: Record<string, DiagLogLevel> = {
-  ALL: DiagLogLevel.ALL,
-  VERBOSE: DiagLogLevel.VERBOSE,
-  DEBUG: DiagLogLevel.DEBUG,
-  INFO: DiagLogLevel.INFO,
   WARN: DiagLogLevel.WARN,
   ERROR: DiagLogLevel.ERROR,
   NONE: DiagLogLevel.NONE,
