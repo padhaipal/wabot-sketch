@@ -1,9 +1,16 @@
 import { Injectable, Logger } from '@nestjs/common';
+import type { Queue } from 'bullmq';
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createQueue, QUEUE_NAMES } from '../../../redis/queues.js';
 
 @Injectable()
 export class AcceptService {
   private readonly logger = new Logger(AcceptService.name);
+  private readonly ingestQueue: Queue;
+
+  constructor() {
+    this.ingestQueue = createQueue(QUEUE_NAMES.INGEST);
+  }
 
   isValidSignature(
     signatureHeader: string | undefined,
@@ -31,6 +38,38 @@ export class AcceptService {
       this.logger.warn(
         'Decrypted webhook payload: [unserializable]',
       );
+    }
+  }
+
+  async receiveWebhook(
+    body: unknown,
+    otelCarrier: Record<string, string>,
+  ): Promise<number> {
+    const deadline = Date.now() + 10_000;
+    let delay = 500;
+
+    for (;;) {
+      try {
+        await this.ingestQueue.add('webhook', {
+          otel: { carrier: otelCarrier },
+          body,
+        });
+        this.logger.log('Job enqueued on ingest queue');
+        return 200;
+      } catch (error: unknown) {
+        const remaining = deadline - Date.now();
+        if (remaining <= delay) {
+          this.logger.error(
+            `Failed to enqueue ingest job after retries: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          );
+          return 500;
+        }
+        this.logger.warn(`Enqueue attempt failed, retrying in ${delay}ms`);
+        await new Promise<void>((resolve) => setTimeout(resolve, delay));
+        delay = Math.min(delay * 2, 5_000);
+      }
     }
   }
 
