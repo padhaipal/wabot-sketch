@@ -1,7 +1,7 @@
 {
   "name": "wabot-sketch",
   "version": "0.0.1",
-  "description": "Incomplete dependency list. Still needed: bullmq, ioredis, @opentelemetry/api, @opentelemetry/sdk-node, etc.",
+  "description": "WhatsApp bot sketch service with OpenTelemetry instrumentation.",
   "author": "",
   "private": true,
   "license": "UNLICENSED",
@@ -23,6 +23,14 @@
     "@nestjs/common": "^11.0.1",
     "@nestjs/core": "^11.0.1",
     "@nestjs/platform-express": "^11.0.1",
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/auto-instrumentations-node": "^0.71.0",
+    "@opentelemetry/exporter-logs-otlp-proto": "^0.213.0",
+    "@opentelemetry/exporter-metrics-otlp-proto": "^0.213.0",
+    "@opentelemetry/exporter-trace-otlp-proto": "^0.213.0",
+    "@opentelemetry/sdk-logs": "^0.213.0",
+    "@opentelemetry/sdk-metrics": "^2.6.0",
+    "@opentelemetry/sdk-node": "^0.213.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1"
   },
