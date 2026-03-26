@@ -12,12 +12,12 @@ import {
   ValidatorConstraintInterface,
   ValidationArguments,
 } from 'class-validator';
-import { OtelCarrierDto } from '../../../otel/otel.dto';
+import { OtelCarrierDto } from '../../../otel/otel.dto.js';
 
 @ValidatorConstraint({ name: 'typeMatchesPayload', async: false })
 class TypeMatchesPayloadConstraint implements ValidatorConstraintInterface {
   validate(_: unknown, args: ValidationArguments): boolean {
-    const dto = args.object as MessageDto;
+    const dto = args.object as PpMessageDto;
 
     const typeToField: Record<string, unknown> = {
       audio: dto.audio,
@@ -34,32 +34,32 @@ class TypeMatchesPayloadConstraint implements ValidatorConstraintInterface {
   }
 
   defaultMessage(args: ValidationArguments): string {
-    const dto = args.object as MessageDto;
+    const dto = args.object as PpMessageDto;
     return `type "${dto.type}" must match the populated field. Exactly one of audio, text, video or system must be present and it must match type.`;
   }
 }
 
-export class AudioDto {
+export class PpAudioDto {
   @IsString()
   mediaUrl!: string;
 }
 
-export class VideoDto {
+export class PpVideoDto {
   @IsString()
   mediaUrl!: string;
 }
 
-export class TextDto {
+export class PpTextDto {
   @IsString()
   body!: string;
 }
 
-export class SystemDto {
+export class PpSystemDto {
   @IsString()
   body!: string;
 }
 
-export class MessageDto {
+export class PpMessageDto {
   @IsString()
   from!: string;
 
@@ -74,36 +74,36 @@ export class MessageDto {
 
   @IsOptional()
   @ValidateNested()
-  @Type(() => AudioDto)
-  audio?: AudioDto;
+  @Type(() => PpAudioDto)
+  audio?: PpAudioDto;
 
   @IsOptional()
   @ValidateNested()
-  @Type(() => TextDto)
-  text?: TextDto;
+  @Type(() => PpTextDto)
+  text?: PpTextDto;
 
   @IsOptional()
   @ValidateNested()
-  @Type(() => VideoDto)
-  video?: VideoDto;
+  @Type(() => PpVideoDto)
+  video?: PpVideoDto;
 
   @IsOptional()
   @ValidateNested()
-  @Type(() => SystemDto)
-  system?: SystemDto;
+  @Type(() => PpSystemDto)
+  system?: PpSystemDto;
 
   @Validate(TypeMatchesPayloadConstraint)
   private readonly typeMatchesPayload!: true;
 }
 
-export class MessageJobDto {
+export class PpMessageJobDto {
   @ValidateNested()
   @Type(() => OtelCarrierDto)
   otel!: OtelCarrierDto;
 
   @ValidateNested()
-  @Type(() => MessageDto)
-  message!: MessageDto;
+  @Type(() => PpMessageDto)
+  message!: PpMessageDto;
 
   @IsOptional()
   @IsBoolean()

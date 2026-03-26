@@ -3,9 +3,7 @@
 3.) Define an async bootstrap() function:
   a.) Create the NestJS app as NestExpressApplication with rawBody: true and logger: new OtelLogger() (see otel/otel-logger.prompt.md). This bridges all NestJS Logger output to OTel so logs reach Grafana Cloud Loki.
   b.) Serve static assets from the project-root `public/` directory using app.useStaticAssets(join(__dirname, '..', 'public')). This makes files in public/ (e.g. fallback-audio-message.mp3) available at the application's root URL path.
-  c.) Register a graceful shutdown handler: define an async shutdown(signal) function that calls closeAll() (drains BullMQ workers/queues and quits Redis) then calls app.close(). Attach it to process SIGTERM and SIGINT via process.on(), using void to discard the promise.
-  d.) Listen for incoming requests on process.env.PORT || 3000.
+  c.) Start BullMQ workers. Call src/interfaces/redis/queues.ts createWorker() for each queue. Workers run in-process with their processors.
+  d.) Register a graceful shutdown handler: define an async shutdown(signal) function that calls closeAll() (drains BullMQ workers/queues and quits Redis) then calls app.close(). Attach it to process SIGTERM and SIGINT via process.on(), using void to discard the promise.
+  e.) Listen for incoming requests on process.env.PORT || 3000.
 4.) Call bootstrap(). Catch any error, log it with console.error, and set process.exitCode = 1.
-
-Future phases (not yet implemented):
-5.) Start BullMQ workers. Call src/interfaces/redis/queues.ts createWorker() for each queue between steps 3b and 3c. Workers run in-process with their processors.

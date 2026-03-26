@@ -5,7 +5,7 @@
 * If entry[].id does not equal WHATSAPP_BUSINESS_ACCOUNT_ID (this is a .env variable) then skip to the next array element.
 * Else continue.
 4.) Flatten `entry[].changes[]`
-* If `.changes[].value` doesn't have a key `'messages'`, `'status'` or `'error'` then skip it. 
+* If `.changes[].value` doesn't have a key `'messages'`, `'statuses'` or `'errors'` then skip it. 
 * If `.changes[].value.messages` exists then check it's data shape against src/interfaces/whatsapp/inbound/process/message/message.dto.ts and/or src/interfaces/whatsapp/inbound/process/message/message.dto.prompt.md.
 * If `.changes[].value.statuses` exists then check it's data shape against src/interfaces/whatsapp/inbound/process/status/status.dto.ts and/or src/interfaces/whatsapp/inbound/process/status/status.dto.prompt.md.
 * If `.changes[].value.errors` exists then check it's data shape against src/interfaces/whatsapp/inbound/process/error/error.dto.ts and/or src/interfaces/whatsapp/inbound/process/error/error.dto.prompt.md.
