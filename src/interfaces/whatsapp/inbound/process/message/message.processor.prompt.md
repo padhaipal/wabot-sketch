@@ -25,10 +25,10 @@
 
 Notes
 * This is what the process-message-timeout job does when it is executed. This code is defined in this file.
-  * it runs src/interfaces/whatsapp/outbound/outbound.service.ts/sendMessage() with FALL_BACK_MESSAGE_EXTERNAL_ID
+  * it runs src/interfaces/whatsapp/outbound/outbound.service.ts/sendMessage() with FALL_BACK_MESSAGE_PUBLIC_URL
 
 
-* Send fall back message. Call src/interfaces/whatsapp/outbound/outbound.service.ts/sendMessage() with .env variable FALL_BACK_MESSAGE_EXTERNAL_ID. Note that sendMessage() handles retries on 5XX. Wait for response from sendMessage() log that response and complete the job and span.
+* Send fall back message. Call src/interfaces/whatsapp/outbound/outbound.service.ts/sendMessage() with .env variable FALL_BACK_MESSAGE_PUBLIC_URL. This is a public URL (starts with http) pointing to a video or audio file hosted in the wabot-sketch repository. Because it is a public URL (not a preloaded WhatsApp media ID), sendMessage() will use the `{ link: url }` media object form. Infer the WhatsApp media type (audio or video) from the URL file extension. Note that sendMessage() handles retries on 5XX. Wait for response from sendMessage() log that response and complete the job and span.
 
 
 * Non-responsive redis.

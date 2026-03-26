@@ -25,7 +25,7 @@ Sends an ordered list of media items to a student via the WhatsApp Cloud API. Ea
   `DEL "{wabot:${ENV}}:inflight:user-id:<user_id>:wamid:<wamid>"` and 
   `DEL "{wabot:${ENV}}:consecutive-check:user-id:<user_id>"`
 	* If the Lua command succeeds (ie both DEL commands return 1) then send the messages to WhatsApp (see below).
-	* If the Lua command fails (ie both DEL commands return 0) then log INFO and return 200 with body `{ delivered: false, reason: "inflight-expired" }`. The inflight window was consumed by the timeout job, meaning the fallback message was already sent to the student.
+	* If the Lua command fails (ie either DEL command returns 0) then log INFO and return 200 with body `{ delivered: false, reason: "inflight-expired" }`. The inflight window was consumed by the timeout job, meaning the fallback message was already sent to the student.
 
 Sending messages to WhatsApp:
 * Iterate over the `media` array in order. For each item, POST to https://graph.facebook.com/v21.0/${PHONE_NUMBER_ID}/messages with headers { 'Authorization': `Bearer ${WHATSAPP_ACCESS_TOKEN}`, 'Content-Type': 'application/json' }. Wait for the HTTP response before sending the next item.
@@ -38,9 +38,9 @@ Sending messages to WhatsApp:
     - Otherwise: treat item.url as a WhatsApp media ID and use `{ id: item.url }` (preloaded media).
 * WhatsApp returns on success: `{ messaging_product: "whatsapp", contacts: [{ input, wa_id }], messages: [{ id, message_status }] }`.
 * If WhatsApp returns 2XX for all items then log INFO and return 200 with body `{ delivered: true }`.
-* If WhatsApp returns 4XX for any item then log ERROR and return that 4XX status immediately (do not send remaining items).
+* If WhatsApp returns 4XX for any item then log ERROR and return that 4XX status with body `{ delivered: false, reason: "whatsapp-error" }` immediately (do not send remaining items).
 * If WhatsApp returns 5XX for any item then retry that item with exponential backoff, max time cap of 5s.
-  * If max time cap is reached then log ERROR and return the 5XX status (do not send remaining items).
+  * If max time cap is reached then log ERROR and return the 5XX status with body `{ delivered: false, reason: "whatsapp-error" }` (do not send remaining items).
 
 downloadMedia(media_url: string): Promise<{ stream: NodeJS.ReadableStream, content_type: string }>
 WHATSAPP_ACCESS_TOKEN is available in .env.
