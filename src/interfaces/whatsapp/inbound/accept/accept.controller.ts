@@ -8,7 +8,7 @@ import {
   Req,
   Res,
 } from '@nestjs/common';
-import { context, propagation, trace } from '@opentelemetry/api';
+import { context, propagation, SpanStatusCode, trace } from '@opentelemetry/api';
 import type { Request, Response } from 'express';
 import { AcceptService } from './accept.service';
 
@@ -71,6 +71,15 @@ export class AcceptController {
 
       const status = await this.acceptService.receiveWebhook(body, carrier);
       response.status(status).send();
+    } catch (error: unknown) {
+      span.setStatus({
+        code: SpanStatusCode.ERROR,
+        message: error instanceof Error ? error.message : String(error),
+      });
+      span.recordException(
+        error instanceof Error ? error : new Error(String(error)),
+      );
+      throw error;
     } finally {
       span.end();
     }

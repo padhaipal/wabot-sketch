@@ -1,6 +1,7 @@
 import './otel/otel';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
+import { OtelLogger } from './otel/otel-logger.js';
 import {
   closeAll,
   createWorker,
@@ -17,6 +18,7 @@ import { processError } from './interfaces/whatsapp/inbound/process/error/error.
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule, {
     rawBody: true,
+    logger: new OtelLogger(),
   });
 
   createWorker(QUEUE_NAMES.INGEST, parseParse);

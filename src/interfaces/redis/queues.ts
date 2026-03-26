@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { Queue, Worker } from 'bullmq';
 import type { JobsOptions, Processor, WorkerOptions } from 'bullmq';
 import Redis from 'ioredis';
@@ -17,6 +18,7 @@ if (!redisUrl) {
 
 const env = process.env.ENV ?? 'development';
 const prefix = `{wabot:${env}}`;
+const logger = new Logger('BullMQ');
 
 export const connection = new Redis(redisUrl, {
   maxRetriesPerRequest: null,
@@ -52,6 +54,17 @@ export function createWorker(
     prefix,
     ...opts,
   });
+
+  worker.on('error', (err) => {
+    logger.error(`Worker [${name}] error: ${err.message}`);
+  });
+
+  worker.on('failed', (job, err) => {
+    logger.error(
+      `Job ${String(job?.id)} failed on [${name}]: ${err.message}`,
+    );
+  });
+
   workers.push(worker);
   return worker;
 }

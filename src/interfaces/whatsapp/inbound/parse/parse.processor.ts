@@ -1,5 +1,5 @@
 import { Logger } from '@nestjs/common';
-import { context, propagation, trace } from '@opentelemetry/api';
+import { context, propagation, SpanStatusCode, trace } from '@opentelemetry/api';
 import type { Job, Processor, Queue } from 'bullmq';
 import { plainToInstance } from 'class-transformer';
 import { validateSync } from 'class-validator';
@@ -43,6 +43,13 @@ function extractJobs(opts: {
 }): ParsedJobs {
   const result: ParsedJobs = { messages: [], statuses: [], errors: [] };
 
+  if (!businessAccountId) {
+    logger.warn(
+      'WHATSAPP_BUSINESS_ACCOUNT_ID is not set; all webhook entries will be skipped',
+    );
+    return result;
+  }
+
   for (const entry of opts.dto.body.entry) {
     if (entry.id !== businessAccountId) {
       continue;
@@ -59,6 +66,10 @@ function extractJobs(opts: {
           });
           if (valid) {
             result.messages.push({ name: 'message', data: valid });
+          } else {
+            logger.warn(
+              `Message dropped: failed MessageJobDto validation [keys=${Object.keys(msg as Record<string, unknown>).join(',')}]`,
+            );
           }
         }
       }
@@ -154,6 +165,10 @@ export const parseParse: Processor = async (job: Job): Promise<void> => {
 
     const jobs = extractJobs({ dto: result.dto, carrier });
 
+    span.setAttribute('parse.message_count', jobs.messages.length);
+    span.setAttribute('parse.status_count', jobs.statuses.length);
+    span.setAttribute('parse.error_count', jobs.errors.length);
+
     await bulkAddWithRetry({
       queue: messageQueue,
       jobs: jobs.messages,
@@ -180,6 +195,15 @@ export const parseParse: Processor = async (job: Job): Promise<void> => {
         `${String(jobs.statuses.length)} statuses, ` +
         `${String(jobs.errors.length)} errors`,
     );
+  } catch (error: unknown) {
+    span.setStatus({
+      code: SpanStatusCode.ERROR,
+      message: error instanceof Error ? error.message : String(error),
+    });
+    span.recordException(
+      error instanceof Error ? error : new Error(String(error)),
+    );
+    throw error;
   } finally {
     span.end();
   }

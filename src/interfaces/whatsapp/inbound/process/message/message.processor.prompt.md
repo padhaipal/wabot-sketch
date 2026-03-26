@@ -34,3 +34,8 @@ Notes
 * Non-responsive redis.
   * If redis is non-responsive then log a WARN and retry with exponential backoff with a maximum time cap of 10s. 
     * If that maximum time cap is reached then log an ERROR and send the fall back message (see notes).
+
+Observability
+* Set span attributes: wamid, message.type.
+* Record wabot.message.e2e_duration_ms histogram (see otel/metrics.prompt.md) with outcome attribute: "success" or "fallback".
+* Set span error status and record exception on failures.

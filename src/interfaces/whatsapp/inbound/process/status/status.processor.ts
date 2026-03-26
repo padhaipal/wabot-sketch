@@ -1,5 +1,5 @@
 import { Logger } from '@nestjs/common';
-import { context, propagation, trace } from '@opentelemetry/api';
+import { context, propagation, SpanStatusCode, trace } from '@opentelemetry/api';
 import type { Job, Processor } from 'bullmq';
 import { validateJobData } from '../../../../../validation/validate-job.js';
 import { StatusJobDto } from './status.dto.js';
@@ -26,12 +26,24 @@ export const processStatus: Processor = async (job: Job): Promise<void> => {
 
     const { status } = result.dto;
 
+    span.setAttribute('status.id', status.id);
+    span.setAttribute('status.status', status.status);
+
     logger.log(`WhatsApp status update received`, {
       statusId: status.id,
       status: status.status,
       timestamp: status.timestamp,
       recipientId: status.recipient_id,
     });
+  } catch (error: unknown) {
+    span.setStatus({
+      code: SpanStatusCode.ERROR,
+      message: error instanceof Error ? error.message : String(error),
+    });
+    span.recordException(
+      error instanceof Error ? error : new Error(String(error)),
+    );
+    throw error;
   } finally {
     span.end();
   }

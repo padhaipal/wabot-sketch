@@ -33,3 +33,6 @@ Dependencies: `bullmq`, `ioredis`.
 6.) closeAll() → Promise<void> (exported).
 * Close all tracked workers in parallel, then all tracked queues in parallel, then gracefully quit the Redis connection.
 * Called by main.ts on SIGTERM/SIGINT (see main.prompt.md).
+
+7.) Worker error handlers.
+* Each worker registers 'error' and 'failed' event handlers that log ERROR with the worker name and error message.

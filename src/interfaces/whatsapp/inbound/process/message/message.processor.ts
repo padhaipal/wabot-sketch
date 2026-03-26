@@ -1,5 +1,5 @@
 import { Logger } from '@nestjs/common';
-import { context, propagation, trace } from '@opentelemetry/api';
+import { context, propagation, SpanStatusCode, trace } from '@opentelemetry/api';
 import type { Job, Processor, Queue } from 'bullmq';
 import {
   connection,
@@ -9,6 +9,7 @@ import {
 import { validateJobData } from '../../../../../validation/validate-job.js';
 import * as waOutbound from '../../../outbound/outbound.service.js';
 import * as ppOutbound from '../../../../pp/outbound/outbound.service.js';
+import { messageE2eDuration } from '../../../../../otel/metrics.js';
 import { MessageJobDto } from './message.dto.js';
 
 const logger = new Logger('MessageProcessor');
@@ -197,6 +198,10 @@ export const processMessage: Processor = async (job: Job): Promise<void> => {
     const { message } = result.dto;
     const userId = message.from;
     const wamid = message.id;
+    const messageTimestampMs = parseInt(message.timestamp, 10) * 1000;
+
+    span.setAttribute('wamid', wamid);
+    span.setAttribute('message.type', message.type);
 
     logger.log(
       `>>> MESSAGE REACHED PROCESSOR: wamid=${wamid} from=${userId} type=${message.type} body=${JSON.stringify(message.text?.body ?? message.audio?.mediaUrl ?? message.video?.mediaUrl ?? message.system?.body ?? '(no body)')}`,
@@ -207,6 +212,9 @@ export const processMessage: Processor = async (job: Job): Promise<void> => {
       isNew = await dedupeMessage(wamid);
     } catch {
       await sendFallback({ userId, wamid });
+      messageE2eDuration.record(Date.now() - messageTimestampMs, {
+        outcome: 'fallback',
+      });
       throw new Error('Redis dedupe unavailable');
     }
 
@@ -250,6 +258,9 @@ export const processMessage: Processor = async (job: Job): Promise<void> => {
       isConsecutive = await checkConsecutive({ userId, wamid });
     } catch {
       await sendFallback({ userId, wamid });
+      messageE2eDuration.record(Date.now() - messageTimestampMs, {
+        outcome: 'fallback',
+      });
       throw new Error('Redis consecutive-check unavailable');
     }
 
@@ -263,6 +274,9 @@ export const processMessage: Processor = async (job: Job): Promise<void> => {
       logger.log(
         `PP accepted message wamid=${wamid}, status=${String(ppStatus)}`,
       );
+      messageE2eDuration.record(Date.now() - messageTimestampMs, {
+        outcome: 'success',
+      });
       return;
     }
 
@@ -270,7 +284,19 @@ export const processMessage: Processor = async (job: Job): Promise<void> => {
       `PP returned ${String(ppStatus)} for wamid=${wamid}`,
     );
     await sendFallback({ userId, wamid });
+    messageE2eDuration.record(Date.now() - messageTimestampMs, {
+      outcome: 'fallback',
+    });
     throw new Error(`PP returned ${String(ppStatus)}`);
+  } catch (error: unknown) {
+    span.setStatus({
+      code: SpanStatusCode.ERROR,
+      message: error instanceof Error ? error.message : String(error),
+    });
+    span.recordException(
+      error instanceof Error ? error : new Error(String(error)),
+    );
+    throw error;
   } finally {
     span.end();
   }
@@ -312,6 +338,15 @@ export const processMessageTimeout: Processor = async (
     logger.log(
       `Timeout fallback for user ${userId}: delivered=${String(result.body.delivered)}`,
     );
+  } catch (error: unknown) {
+    span.setStatus({
+      code: SpanStatusCode.ERROR,
+      message: error instanceof Error ? error.message : String(error),
+    });
+    span.recordException(
+      error instanceof Error ? error : new Error(String(error)),
+    );
+    throw error;
   } finally {
     span.end();
   }

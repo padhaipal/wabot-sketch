@@ -19,6 +19,9 @@ ERROR logs terminal failure
 Service Level Objectives
 - 99.9% of wabot message responses occur ≤ 25 seconds after user submitted their message
 
+Metrics
+- wabot.message.e2e_duration_ms (Histogram): end-to-end milliseconds from WhatsApp message timestamp to wabot processing completion. Attributes: outcome ("success", "fallback"). Exported via OTLP.
+
 Emit OpenTelemetry
 - enable auto-instrumentation for HTTP / Express / Node libraries
 - create manual spans around queues + important business logic

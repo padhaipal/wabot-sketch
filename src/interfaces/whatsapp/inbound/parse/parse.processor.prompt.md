@@ -16,3 +16,9 @@
 * If the status or error bulk add fails then log a WARN and retry with exponential backoff with a max time cap of 24 hours. 
   * If max time cap is reached then log an ERROR, end the span and fail the job. 
 * Else log an INFO, end the span and complete the job.
+
+Observability
+* Log WARN when WHATSAPP_BUSINESS_ACCOUNT_ID is not set.
+* Log WARN when a message fails MessageJobDto validation (includes the raw keys for debugging).
+* Set span attributes: parse.message_count, parse.status_count, parse.error_count.
+* Set span error status and record exception on failures.
