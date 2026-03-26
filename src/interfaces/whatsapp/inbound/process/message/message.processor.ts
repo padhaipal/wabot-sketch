@@ -198,6 +198,10 @@ export const processMessage: Processor = async (job: Job): Promise<void> => {
     const userId = message.from;
     const wamid = message.id;
 
+    logger.log(
+      `>>> MESSAGE REACHED PROCESSOR: wamid=${wamid} from=${userId} type=${message.type} body=${JSON.stringify(message.text?.body ?? message.audio?.mediaUrl ?? message.video?.mediaUrl ?? message.system?.body ?? '(no body)')}`,
+    );
+
     let isNew: boolean;
     try {
       isNew = await dedupeMessage(wamid);
