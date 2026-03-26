@@ -1,5 +1,7 @@
 import './otel/otel';
+import { join } from 'node:path';
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import { OtelLogger } from './otel/otel-logger.js';
 import {
@@ -16,10 +18,12 @@ import { processStatus } from './interfaces/whatsapp/inbound/process/status/stat
 import { processError } from './interfaces/whatsapp/inbound/process/error/error.processor.js';
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule, {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     rawBody: true,
     logger: new OtelLogger(),
   });
+
+  app.useStaticAssets(join(__dirname, '..', 'public'));
 
   createWorker(QUEUE_NAMES.INGEST, parseParse);
   createWorker(QUEUE_NAMES.PROCESS_MESSAGE, processMessage);
