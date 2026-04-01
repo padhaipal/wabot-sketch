@@ -30,11 +30,11 @@ function extractHttpStatus(error: unknown): number {
   return code >= 400 && code <= 599 ? code : 500;
 }
 
-@Controller('pp')
+@Controller()
 export class PpInboundController {
   private readonly tracer = trace.getTracer('pp-inbound-controller');
 
-  @Post('send-message')
+  @Post('sendMessage')
   async sendMessage(
     @Body() body: unknown,
     @Res() response: Response,
@@ -80,7 +80,7 @@ export class PpInboundController {
     }
   }
 
-  @Post('download-media')
+  @Post('downloadMedia')
   async downloadMedia(
     @Body() body: unknown,
     @Res() response: Response,
@@ -135,7 +135,7 @@ export class PpInboundController {
     }
   }
 
-  @Post('upload-media')
+  @Post('uploadMedia')
   async uploadMedia(
     @Req() request: RequestWithRawBody,
     @Headers('content-type') contentType: string | undefined,
