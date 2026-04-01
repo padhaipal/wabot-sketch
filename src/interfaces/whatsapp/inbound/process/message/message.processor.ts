@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { context, propagation, SpanStatusCode, trace } from '@opentelemetry/api';
 import type { Job, Processor, Queue } from 'bullmq';
+import type { OtelCarrier } from '../../../../../otel/otel.dto.js';
 import {
   connection,
   createQueue,
@@ -116,7 +117,7 @@ async function enqueueTimeout(opts: {
   userId: string;
   wamid: string;
   messageTimestamp: string;
-  carrier: Record<string, string>;
+  carrier: OtelCarrier;
 }): Promise<void> {
   const timestampMs = parseInt(opts.messageTimestamp, 10) * 1000;
   const delay = Math.max(0, timestampMs + 20_000 - Date.now());
@@ -180,7 +181,7 @@ async function checkConsecutive(opts: {
 export const processMessage: Processor = async (job: Job): Promise<void> => {
   const parentCtx = propagation.extract(
     context.active(),
-    (job.data as { otel?: { carrier?: Record<string, string> } })?.otel
+    (job.data as { otel?: { carrier?: OtelCarrier } })?.otel
       ?.carrier ?? {},
   );
   const span = tracer.startSpan('process-message', {}, parentCtx);
@@ -223,7 +224,7 @@ export const processMessage: Processor = async (job: Job): Promise<void> => {
       return;
     }
 
-    const carrier: Record<string, string> = {};
+    const carrier: OtelCarrier = {};
     propagation.inject(ctx, carrier);
 
     const readReceiptPromise = waOutbound
@@ -306,7 +307,7 @@ export const processMessageTimeout: Processor = async (
   job: Job,
 ): Promise<void> => {
   const data = job.data as {
-    otel?: { carrier?: Record<string, string> };
+    otel?: { carrier?: OtelCarrier };
     userId?: string;
     wamid?: string;
   };

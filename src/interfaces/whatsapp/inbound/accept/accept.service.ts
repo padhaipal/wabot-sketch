@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { Queue } from 'bullmq';
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import type { OtelCarrier } from '../../../../otel/otel.dto.js';
 import { createQueue, QUEUE_NAMES } from '../../../redis/queues.js';
 
 @Injectable()
@@ -43,7 +44,7 @@ export class AcceptService {
 
   async receiveWebhook(
     body: unknown,
-    otelCarrier: Record<string, string>,
+    otelCarrier: OtelCarrier,
   ): Promise<number> {
     const deadline = Date.now() + 10_000;
     let delay = 500;

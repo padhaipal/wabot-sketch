@@ -9,6 +9,7 @@ import {
   Res,
 } from '@nestjs/common';
 import { context, propagation, SpanStatusCode, trace } from '@opentelemetry/api';
+import type { OtelCarrier } from '../../../../otel/otel.dto.js';
 import type { Request, Response } from 'express';
 import { AcceptService } from './accept.service';
 
@@ -66,7 +67,7 @@ export class AcceptController {
     const span = this.tracer.startSpan('enqueue-ingest');
     try {
       const ctx = trace.setSpan(context.active(), span);
-      const carrier: Record<string, string> = {};
+      const carrier: OtelCarrier = {};
       propagation.inject(ctx, carrier);
 
       const status = await this.acceptService.receiveWebhook(body, carrier);

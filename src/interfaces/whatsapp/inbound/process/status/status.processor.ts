@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { context, propagation, SpanStatusCode, trace } from '@opentelemetry/api';
 import type { Job, Processor } from 'bullmq';
+import type { OtelCarrier } from '../../../../../otel/otel.dto.js';
 import { validateJobData } from '../../../../../validation/validate-job.js';
 import { StatusJobDto } from './status.dto.js';
 
@@ -10,7 +11,7 @@ const tracer = trace.getTracer('status-processor');
 export const processStatus: Processor = async (job: Job): Promise<void> => {
   const parentCtx = propagation.extract(
     context.active(),
-    (job.data as { otel?: { carrier?: Record<string, string> } })?.otel
+    (job.data as { otel?: { carrier?: OtelCarrier } })?.otel
       ?.carrier ?? {},
   );
   const span = tracer.startSpan('process-status', {}, parentCtx);

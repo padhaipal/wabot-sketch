@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { context, propagation, SpanStatusCode, trace } from '@opentelemetry/api';
 import type { Job, Processor, Queue } from 'bullmq';
+import type { OtelCarrier } from '../../../../otel/otel.dto.js';
 import { plainToInstance } from 'class-transformer';
 import { validateSync } from 'class-validator';
 import {
@@ -39,7 +40,7 @@ interface ParsedJobs {
 
 function extractJobs(opts: {
   dto: ParseWebhookJobDto;
-  carrier: Record<string, string>;
+  carrier: OtelCarrier;
 }): ParsedJobs {
   const result: ParsedJobs = { messages: [], statuses: [], errors: [] };
 
@@ -145,7 +146,7 @@ async function bulkAddWithRetry(opts: {
 export const parseParse: Processor = async (job: Job): Promise<void> => {
   const parentCtx = propagation.extract(
     context.active(),
-    (job.data as { otel?: { carrier?: Record<string, string> } })?.otel
+    (job.data as { otel?: { carrier?: OtelCarrier } })?.otel
       ?.carrier ?? {},
   );
   const span = tracer.startSpan('process-parse', {}, parentCtx);
@@ -160,7 +161,7 @@ export const parseParse: Processor = async (job: Job): Promise<void> => {
       throw new Error('Invalid parse job data');
     }
 
-    const carrier: Record<string, string> = {};
+    const carrier: OtelCarrier = {};
     propagation.inject(ctx, carrier);
 
     const jobs = extractJobs({ dto: result.dto, carrier });
