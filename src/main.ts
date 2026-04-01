@@ -24,6 +24,10 @@ async function bootstrap(): Promise<void> {
   });
 
   app.useStaticAssets(join(__dirname, '..', 'public'));
+  app.useBodyParser('raw', {
+    type: ['audio/*', 'video/*', 'image/*'],
+    limit: '16mb',
+  });
 
   createWorker(QUEUE_NAMES.INGEST, parseParse);
   createWorker(QUEUE_NAMES.PROCESS_MESSAGE, processMessage);
