@@ -144,12 +144,12 @@ export class PpInboundController {
     @Res() response: Response,
   ): Promise<void> {
     logger.log(
-      `[v2] uploadMedia hit, content-type=${contentType}, x-media-type=${mediaType}, rawBody=${Buffer.isBuffer(request.rawBody) ? request.rawBody.length : 'missing'}, body=${Buffer.isBuffer(request.body) ? (request.body as Buffer).length : typeof request.body}`,
+      `uploadMedia hit, content-type=${contentType}, x-media-type=${mediaType}, rawBody=${Buffer.isBuffer(request.rawBody) ? request.rawBody.length : 'missing'}, body=${Buffer.isBuffer(request.body) ? (request.body as Buffer).length : typeof request.body}`,
     );
 
     const rawBody = request.rawBody;
     if (!Buffer.isBuffer(rawBody)) {
-      logger.warn('[v2] uploadMedia rejecting: rawBody is not a Buffer');
+      logger.warn('uploadMedia rejecting: rawBody is not a Buffer');
       response.status(400).json({ error: 'Raw body is required' });
       return;
     }
