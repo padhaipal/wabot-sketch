@@ -38,12 +38,12 @@ class TypeMatchesPayloadConstraint implements ValidatorConstraintInterface {
 
 export class PpAudioDto {
   @IsString()
-  mediaUrl!: string;
+  url!: string;
 }
 
 export class PpVideoDto {
   @IsString()
-  mediaUrl!: string;
+  url!: string;
 }
 
 export class PpTextDto {

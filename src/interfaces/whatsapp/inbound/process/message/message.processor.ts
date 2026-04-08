@@ -205,7 +205,7 @@ export const processMessage: Processor = async (job: Job): Promise<void> => {
     span.setAttribute('message.type', message.type);
 
     logger.log(
-      `>>> MESSAGE REACHED PROCESSOR: wamid=${wamid} from=${userId} type=${message.type} body=${JSON.stringify(message.text?.body ?? message.audio?.mediaUrl ?? message.video?.mediaUrl ?? message.system?.body ?? '(no body)')}`,
+      `>>> MESSAGE REACHED PROCESSOR: wamid=${wamid} from=${userId} type=${message.type} body=${JSON.stringify(message.text?.body ?? message.audio?.url ?? message.video?.url ?? message.system?.body ?? '(no body)')}`,
     );
 
     let isNew: boolean;
