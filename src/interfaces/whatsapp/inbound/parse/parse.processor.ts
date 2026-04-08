@@ -26,10 +26,43 @@ const businessAccountId = process.env.WHATSAPP_BUSINESS_ACCOUNT_ID;
 function validateDto<T extends object>(
   cls: new () => T,
   data: unknown,
-): T | null {
+): { instance: T | null; errorDetail: string } {
   const instance = plainToInstance(cls, data as Record<string, unknown>);
   const errors = validateSync(instance);
-  return errors.length === 0 ? instance : null;
+  if (errors.length === 0) {
+    return { instance, errorDetail: '' };
+  }
+  const errorDetail = errors
+    .map((e) => {
+      const constraints = e.constraints
+        ? Object.values(e.constraints).join('|')
+        : '';
+      const children =
+        e.children && e.children.length > 0
+          ? e.children
+              .map(
+                (c) =>
+                  `${c.property}:${
+                    c.constraints
+                      ? Object.values(c.constraints).join('|')
+                      : (c.children ?? [])
+                          .map(
+                            (cc) =>
+                              `${cc.property}:${
+                                cc.constraints
+                                  ? Object.values(cc.constraints).join('|')
+                                  : ''
+                              }`,
+                          )
+                          .join(',')
+                  }`,
+              )
+              .join(',')
+          : '';
+      return `${e.property}{${constraints}${children ? `;children=${children}` : ''}}`;
+    })
+    .join(' || ');
+  return { instance: null, errorDetail };
 }
 
 interface ParsedJobs {
@@ -51,7 +84,13 @@ function extractJobs(opts: {
     return result;
   }
 
+  logger.log(
+    `[HPTRACE] parse: extractJobs entries=${opts.dto.body.entry.length} expectedBizId=${businessAccountId}`,
+  );
   for (const entry of opts.dto.body.entry) {
+    logger.log(
+      `[HPTRACE] parse: entry id=${entry.id} matches=${entry.id === businessAccountId} changes=${entry.changes.length}`,
+    );
     if (entry.id !== businessAccountId) {
       continue;
     }
@@ -61,15 +100,30 @@ function extractJobs(opts: {
 
       if ('messages' in value && Array.isArray(value.messages)) {
         for (const msg of value.messages as unknown[]) {
-          const valid = validateDto(MessageJobDto, {
+          const msgObj = msg as Record<string, unknown>;
+          logger.log(
+            `[HPTRACE] parse: raw message keys=${Object.keys(msgObj).join(',')} type=${String(msgObj.type)} from=${String(msgObj.from)} id=${String(msgObj.id)}`,
+          );
+          if (msgObj.audio) {
+            logger.log(
+              `[HPTRACE] parse: audio subkeys=${Object.keys(msgObj.audio as Record<string, unknown>).join(',')} audio=${JSON.stringify(msgObj.audio)}`,
+            );
+          }
+          if (msgObj.text) {
+            logger.log(
+              `[HPTRACE] parse: text subkeys=${Object.keys(msgObj.text as Record<string, unknown>).join(',')}`,
+            );
+          }
+          const { instance: valid, errorDetail } = validateDto(MessageJobDto, {
             otel: { carrier: opts.carrier },
             message: msg,
           });
           if (valid) {
+            logger.log(`[HPTRACE] parse: message VALID id=${String(msgObj.id)}`);
             result.messages.push({ name: 'message', data: valid });
           } else {
             logger.warn(
-              `Message dropped: failed MessageJobDto validation [keys=${Object.keys(msg as Record<string, unknown>).join(',')}]`,
+              `[HPTRACE] Message dropped: failed MessageJobDto validation [keys=${Object.keys(msgObj).join(',')}] errors=${errorDetail} fullMessage=${JSON.stringify(msg)}`,
             );
           }
         }
@@ -77,24 +131,32 @@ function extractJobs(opts: {
 
       if ('statuses' in value && Array.isArray(value.statuses)) {
         for (const st of value.statuses as unknown[]) {
-          const valid = validateDto(StatusJobDto, {
+          const { instance: valid, errorDetail } = validateDto(StatusJobDto, {
             otel: { carrier: opts.carrier },
             status: st,
           });
           if (valid) {
             result.statuses.push({ name: 'status', data: valid });
+          } else {
+            logger.warn(
+              `[HPTRACE] Status dropped: errors=${errorDetail}`,
+            );
           }
         }
       }
 
       if ('errors' in value && Array.isArray(value.errors)) {
         for (const err of value.errors as unknown[]) {
-          const valid = validateDto(ErrorJobDto, {
+          const { instance: valid, errorDetail } = validateDto(ErrorJobDto, {
             otel: { carrier: opts.carrier },
             error: err,
           });
           if (valid) {
             result.errors.push({ name: 'error', data: valid });
+          } else {
+            logger.warn(
+              `[HPTRACE] Error entry dropped: errors=${errorDetail}`,
+            );
           }
         }
       }
@@ -153,6 +215,9 @@ export const parseParse: Processor = async (job: Job): Promise<void> => {
   const ctx = trace.setSpan(parentCtx, span);
 
   try {
+    logger.log(
+      `[HPTRACE] parse: job picked up id=${job.id} dataKeys=${Object.keys(job.data as object).join(',')}`,
+    );
     const result = validateJobData(ParseWebhookJobDto, job.data);
     if (!result.success) {
       logger.error(
