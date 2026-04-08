@@ -63,14 +63,20 @@ function buildWaPayload(opts: {
   user_id: string;
   item: OutboundMediaItemDto;
 }): Record<string, unknown> {
+  // Auto-promote image/webp to sticker (WhatsApp does not accept webp as image).
+  const effectiveType =
+    opts.item.type === 'image' && opts.item.mime_type === 'image/webp'
+      ? 'sticker'
+      : opts.item.type;
+
   const base = {
     messaging_product: 'whatsapp',
     recipient_type: 'individual',
     to: opts.user_id,
-    type: opts.item.type,
+    type: effectiveType,
   };
 
-  if (opts.item.type === 'text') {
+  if (effectiveType === 'text') {
     return { ...base, text: { body: opts.item.body } };
   }
 
@@ -78,7 +84,7 @@ function buildWaPayload(opts: {
     ? { link: opts.item.url }
     : { id: opts.item.url };
 
-  return { ...base, [opts.item.type]: mediaObject };
+  return { ...base, [effectiveType]: mediaObject };
 }
 
 async function sendSingleItem(opts: {
@@ -212,12 +218,24 @@ export async function uploadMedia(opts: {
   content_type: string;
   media_type: string;
 }): Promise<{ wa_media_url: string }> {
-  const extensionMap: Record<string, string> = {
+  const mimeExtensionMap: Record<string, string> = {
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+    'video/mp4': 'mp4',
+    'audio/mpeg': 'mp3',
+    'audio/ogg': 'ogg',
+  };
+  const fallbackByMediaType: Record<string, string> = {
     audio: 'mp3',
     video: 'mp4',
     image: 'jpg',
+    sticker: 'webp',
   };
-  const ext = extensionMap[opts.media_type] ?? 'bin';
+  const ext =
+    mimeExtensionMap[opts.content_type] ??
+    fallbackByMediaType[opts.media_type] ??
+    'bin';
   const filename = `upload.${ext}`;
 
   const form = new FormData();

@@ -13,8 +13,8 @@ import { Type } from 'class-transformer';
 import { OtelCarrierDto } from '../../../otel/otel.dto.js';
 
 export class OutboundMediaItemDto {
-  @IsIn(['audio', 'video', 'image', 'text'])
-  type!: 'audio' | 'video' | 'image' | 'text';
+  @IsIn(['audio', 'video', 'image', 'sticker', 'text'])
+  type!: 'audio' | 'video' | 'image' | 'sticker' | 'text';
 
   @ValidateIf((o: OutboundMediaItemDto) => o.type !== 'text')
   @IsString()
@@ -23,6 +23,12 @@ export class OutboundMediaItemDto {
   @ValidateIf((o: OutboundMediaItemDto) => o.type === 'text')
   @IsString()
   body?: string;
+
+  // Optional mime hint. When type='image' and mime_type='image/webp',
+  // wabot sends as a WhatsApp sticker instead of an image.
+  @IsOptional()
+  @IsString()
+  mime_type?: string;
 }
 
 export class SendMessageDto {
