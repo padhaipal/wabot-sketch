@@ -1,3 +1,6 @@
+All endpoints in this controller are protected by InternalApiKeyGuard (src/validation/internal-api-key.guard.ts).
+The guard checks the `x-api-key` header against `INTERNAL_API_KEY` env var using timing-safe comparison. Returns 401 if missing/invalid.
+
 sendMessage()
 1.) Validate the request body against `SendMessageDto` from inbound.dto.ts.
 * If validation fails then return a 400 response.

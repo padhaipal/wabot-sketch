@@ -7,7 +7,9 @@ import {
   Query,
   Req,
   Res,
+  UseGuards,
 } from '@nestjs/common';
+import { InternalApiKeyGuard } from '../../../validation/internal-api-key.guard.js';
 import { context, propagation, SpanStatusCode, trace } from '@opentelemetry/api';
 import type { Request, Response } from 'express';
 import { Readable } from 'node:stream';
@@ -31,6 +33,7 @@ function extractHttpStatus(error: unknown): number {
 }
 
 @Controller()
+@UseGuards(InternalApiKeyGuard)
 export class PpInboundController {
   private readonly tracer = trace.getTracer('pp-inbound-controller');
 
