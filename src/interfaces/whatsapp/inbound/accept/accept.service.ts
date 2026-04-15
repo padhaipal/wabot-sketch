@@ -31,17 +31,6 @@ export class AcceptService {
     return this.validateSignature(signatureHeader, rawBody, appSecret);
   }
 
-  logDecryptedPayload(body: unknown): void {
-    try {
-      const json = JSON.stringify(body, null, 2);
-      this.logger.log(`Decrypted webhook payload: ${json}`);
-    } catch {
-      this.logger.warn(
-        'Decrypted webhook payload: [unserializable]',
-      );
-    }
-  }
-
   async receiveWebhook(
     body: unknown,
     otelCarrier: OtelCarrier,

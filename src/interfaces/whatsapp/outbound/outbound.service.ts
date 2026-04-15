@@ -175,10 +175,8 @@ export async function sendMessage(opts: {
       return { status: response.status, body: { delivered: false, reason: 'whatsapp-error' as const } };
     }
 
-    logger.log(`Sent ${item.type} to user ${opts.user_id}`);
   }
 
-  logger.log(`All media delivered to user ${opts.user_id}`);
   return { status: 200, body: { delivered: true } };
 }
 

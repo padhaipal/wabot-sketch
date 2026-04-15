@@ -29,13 +29,6 @@ export const processStatus: Processor = async (job: Job): Promise<void> => {
 
     span.setAttribute('status.id', status.id);
     span.setAttribute('status.status', status.status);
-
-    logger.log(`WhatsApp status update received`, {
-      statusId: status.id,
-      status: status.status,
-      timestamp: status.timestamp,
-      recipientId: status.recipient_id,
-    });
   } catch (error: unknown) {
     span.setStatus({
       code: SpanStatusCode.ERROR,

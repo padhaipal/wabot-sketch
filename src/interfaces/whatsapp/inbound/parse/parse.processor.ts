@@ -84,13 +84,7 @@ function extractJobs(opts: {
     return result;
   }
 
-  logger.log(
-    `[HPTRACE] parse: extractJobs entries=${opts.dto.body.entry.length} expectedBizId=${businessAccountId}`,
-  );
   for (const entry of opts.dto.body.entry) {
-    logger.log(
-      `[HPTRACE] parse: entry id=${entry.id} matches=${entry.id === businessAccountId} changes=${entry.changes.length}`,
-    );
     if (entry.id !== businessAccountId) {
       continue;
     }
@@ -101,25 +95,11 @@ function extractJobs(opts: {
       if ('messages' in value && Array.isArray(value.messages)) {
         for (const msg of value.messages as unknown[]) {
           const msgObj = msg as Record<string, unknown>;
-          logger.log(
-            `[HPTRACE] parse: raw message keys=${Object.keys(msgObj).join(',')} type=${String(msgObj.type)} from=${String(msgObj.from)} id=${String(msgObj.id)}`,
-          );
-          if (msgObj.audio) {
-            logger.log(
-              `[HPTRACE] parse: audio subkeys=${Object.keys(msgObj.audio as Record<string, unknown>).join(',')} audio=${JSON.stringify(msgObj.audio)}`,
-            );
-          }
-          if (msgObj.text) {
-            logger.log(
-              `[HPTRACE] parse: text subkeys=${Object.keys(msgObj.text as Record<string, unknown>).join(',')}`,
-            );
-          }
           const { instance: valid, errorDetail } = validateDto(MessageJobDto, {
             otel: { carrier: opts.carrier },
             message: msg,
           });
           if (valid) {
-            logger.log(`[HPTRACE] parse: message VALID id=${String(msgObj.id)}`);
             result.messages.push({ name: 'message', data: valid });
           } else {
             logger.warn(
@@ -215,9 +195,6 @@ export const parseParse: Processor = async (job: Job): Promise<void> => {
   const ctx = trace.setSpan(parentCtx, span);
 
   try {
-    logger.log(
-      `[HPTRACE] parse: job picked up id=${job.id} dataKeys=${Object.keys(job.data as object).join(',')}`,
-    );
     const result = validateJobData(ParseWebhookJobDto, job.data);
     if (!result.success) {
       logger.error(
@@ -259,7 +236,7 @@ export const parseParse: Processor = async (job: Job): Promise<void> => {
     logger.log(
       `Parsed webhook: ${String(jobs.messages.length)} messages, ` +
         `${String(jobs.statuses.length)} statuses, ` +
-        `${String(jobs.errors.length)} errors`,
+        `${String(jobs.errors.length)} err`,
     );
   } catch (error: unknown) {
     span.setStatus({
