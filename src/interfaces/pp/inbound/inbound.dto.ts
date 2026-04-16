@@ -54,6 +54,17 @@ export class SendMessageDto {
   media!: OutboundMediaItemDto[];
 }
 
+export class SendNotificationDto {
+  @IsString()
+  user_external_id!: string;
+
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => OutboundMediaItemDto)
+  media!: OutboundMediaItemDto[];
+}
+
 export class DownloadMediaDto {
   @IsDefined()
   @ValidateNested()

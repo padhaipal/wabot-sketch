@@ -16,7 +16,7 @@ import { Readable } from 'node:stream';
 import { validateJobData } from '../../../validation/validate-job.js';
 import type { OtelCarrier } from '../../../otel/otel.dto.js';
 import * as waOutbound from '../../whatsapp/outbound/outbound.service.js';
-import { DownloadMediaDto, SendMessageDto } from './inbound.dto.js';
+import { DownloadMediaDto, SendMessageDto, SendNotificationDto } from './inbound.dto.js';
 
 const logger = new Logger('PpInboundController');
 
@@ -80,6 +80,35 @@ export class PpInboundController {
       response.status(500).json({ error: 'Internal server error' });
     } finally {
       span.end();
+    }
+  }
+
+  @Post('sendNotification')
+  async sendNotification(
+    @Body() body: unknown,
+    @Res() response: Response,
+  ): Promise<void> {
+    const validation = validateJobData(SendNotificationDto, body);
+    if (!validation.success) {
+      logger.warn(`SendNotification validation failed: ${validation.errors.join('; ')}`);
+      response.status(400).json({ errors: validation.errors });
+      return;
+    }
+
+    const dto = validation.dto;
+
+    try {
+      const result = await waOutbound.sendNotification({
+        user_id: dto.user_external_id,
+        media: dto.media,
+      });
+
+      response.status(result.status).json(result);
+    } catch (error: unknown) {
+      logger.error(
+        `sendNotification failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      response.status(500).json({ error: 'Internal server error' });
     }
   }
 

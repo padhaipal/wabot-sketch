@@ -180,6 +180,58 @@ export async function sendMessage(opts: {
   return { status: 200, body: { delivered: true } };
 }
 
+export interface SendNotificationResult {
+  status: number;
+  delivered: boolean;
+  error_code?: number;
+}
+
+export async function sendNotification(opts: {
+  user_id: string;
+  media: OutboundMediaItemDto[];
+}): Promise<SendNotificationResult> {
+  for (const item of opts.media) {
+    const payload = buildWaPayload({ user_id: opts.user_id, item });
+    const response = await fetch(graphUrl(), {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      let body: { error?: { code?: number; message?: string } } = {};
+      try {
+        body = (await response.json()) as typeof body;
+      } catch {
+        // response body wasn't JSON
+      }
+
+      const errorCode = body.error?.code;
+
+      if (errorCode === 130429) {
+        logger.warn(
+          `WhatsApp rate-limit (130429) for user ${opts.user_id}`,
+        );
+        return { status: 429, delivered: false, error_code: 130429 };
+      }
+
+      if (errorCode === 131047) {
+        logger.error(
+          `Message failed: outside 24-hour window (131047) for user ${opts.user_id}`,
+        );
+        return { status: 403, delivered: false, error_code: 131047 };
+      }
+
+      logger.error(
+        `WhatsApp returned ${String(response.status)} for notification to user ${opts.user_id}: ${body.error?.message ?? 'unknown'}`,
+      );
+      return { status: response.status, delivered: false, error_code: errorCode };
+    }
+  }
+
+  return { status: 200, delivered: true };
+}
+
 export async function downloadMedia(
   mediaUrl: string,
 ): Promise<{ stream: NodeJS.ReadableStream; content_type: string }> {
