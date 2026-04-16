@@ -18,8 +18,7 @@ export class OutboundMediaItemDto {
   @IsString()
   body?: string;
 
-  // Optional mime hint. When type='image' and mime_type='image/webp',
-  // wabot sends as a WhatsApp sticker instead of an image.
+  // Optional MIME type hint (informational). Stickers are sent with type='sticker' explicitly.
   @IsOptional()
   @IsString()
   mime_type?: string;

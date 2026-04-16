@@ -63,20 +63,14 @@ function buildWaPayload(opts: {
   user_id: string;
   item: OutboundMediaItemDto;
 }): Record<string, unknown> {
-  // Auto-promote image/webp to sticker (WhatsApp does not accept webp as image).
-  const effectiveType =
-    opts.item.type === 'image' && opts.item.mime_type === 'image/webp'
-      ? 'sticker'
-      : opts.item.type;
-
   const base = {
     messaging_product: 'whatsapp',
     recipient_type: 'individual',
     to: opts.user_id,
-    type: effectiveType,
+    type: opts.item.type,
   };
 
-  if (effectiveType === 'text') {
+  if (opts.item.type === 'text') {
     return { ...base, text: { body: opts.item.body } };
   }
 
@@ -84,7 +78,7 @@ function buildWaPayload(opts: {
     ? { link: opts.item.url }
     : { id: opts.item.url };
 
-  return { ...base, [effectiveType]: mediaObject };
+  return { ...base, [opts.item.type]: mediaObject };
 }
 
 async function sendSingleItem(opts: {

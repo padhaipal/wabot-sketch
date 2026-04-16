@@ -33,8 +33,7 @@ Sending messages to WhatsApp:
   * `type: 'audio'` → body: `{ messaging_product: "whatsapp", recipient_type: "individual", to: user_id, type: "audio", audio: <media_object> }`.
   * `type: 'video'` → body: `{ messaging_product: "whatsapp", recipient_type: "individual", to: user_id, type: "video", video: <media_object> }`.
   * `type: 'image'` → body: `{ messaging_product: "whatsapp", recipient_type: "individual", to: user_id, type: "image", image: <media_object> }`.
-  * `type: 'sticker'` → body: `{ messaging_product: "whatsapp", recipient_type: "individual", to: user_id, type: "sticker", sticker: <media_object> }`.
-  * Auto-promotion: if `type === 'image'` and `mime_type === 'image/webp'`, send as a sticker instead (WhatsApp does not accept webp via the image message type). Use the sticker payload shape above.
+  * `type: 'sticker'` → body: `{ messaging_product: "whatsapp", recipient_type: "individual", to: user_id, type: "sticker", sticker: <media_object> }`. Stickers are sent with type='sticker' explicitly by pp-sketch (no auto-promotion).
   * <media_object> resolution:
     - If item.url starts with "http": use `{ link: item.url }` (external URL).
     - Otherwise: treat item.url as a WhatsApp media ID and use `{ id: item.url }` (preloaded media).

@@ -27,7 +27,7 @@ downloadMedia()
 
 uploadMedia()
 1.) Read the raw binary request body as a Buffer.
-2.) Read the Content-Type header (media mime type, e.g. "audio/mpeg") and X-Media-Type header (WhatsApp media type: "audio", "video", or "image").
+2.) Read the Content-Type header (media mime type, e.g. "audio/mpeg") and X-Media-Type header (WhatsApp media type: "audio", "video", "image", or "sticker").
     * If either header is missing: return a 400 response.
 3.) Extract the OTel carrier from the ?otel= query param (JSON-parsed) and start a span.
 4.) Call src/interfaces/whatsapp/outbound/outbound.service.ts/uploadMedia(buffer, content_type, media_type).

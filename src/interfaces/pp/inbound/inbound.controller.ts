@@ -187,9 +187,9 @@ export class PpInboundController {
       return;
     }
 
-    const validMediaTypes = ['audio', 'video', 'image'] as const;
+    const validMediaTypes = ['audio', 'video', 'image', 'sticker'] as const;
     if (!mediaType || !validMediaTypes.includes(mediaType as typeof validMediaTypes[number])) {
-      response.status(400).json({ error: 'X-Media-Type header must be one of: audio, video, image' });
+      response.status(400).json({ error: 'X-Media-Type header must be one of: audio, video, image, sticker' });
       return;
     }
 
