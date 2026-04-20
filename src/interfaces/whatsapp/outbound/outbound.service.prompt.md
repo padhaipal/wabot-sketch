@@ -20,6 +20,14 @@ Reference: https://developers.facebook.com/docs/whatsapp/cloud-api/reference/mes
 
 Sends an ordered list of media items to a student via the WhatsApp Cloud API. Each item becomes a separate WhatsApp API call, sent sequentially in the order provided.
 
+Observability — delivery-stage recording of `wabot.message.e2e_duration_ms` (see src/otel/metrics.prompt.md):
+* At function entry, read W3C Baggage from `context.active()` via `propagation.getBaggage(context.active())` and extract `wabot.msg.ts_ms` (string-encoded integer). If the entry is missing or NaN, log a WARN ("Missing wabot.msg.ts_ms baggage in sendMessage for user ..., wamid=... — delivery latency metric will not be recorded") and skip the metric. Persistent WARN volume = the baggage propagation chain is broken.
+* At each non-trivial return, record `messageE2eDuration.record(Date.now() - originalTsMs, { outcome })` with outcome set to:
+  - "inflight-expired" before returning `{ delivered: false, reason: "inflight-expired" }`.
+  - "whatsapp-error" before returning a 4XX or post-retry 5XX `{ delivered: false, reason: "whatsapp-error" }`.
+  - "delivered" before returning `{ delivered: true }` after all items 2XX.
+* Callers are responsible for wrapping the call in `context.with(ctxWithBaggage, () => sendMessage(...))` so `context.active()` here has the baggage. Current callers: processMessage's sendFallback helper, processMessageTimeout, and PpInboundController.sendMessage (wabot). See src/otel/metrics.prompt.md for the full propagation chain.
+
 * If the message is flagged as consecutive then skip the Redis inflight check — go straight to sending the messages to WhatsApp and return the result using the `{ delivered: true/false }` shape.
 * Otherwise, attempt the following two DEL commands atomically with a Lua script:
   `DEL "{wabot:${ENV}}:inflight:user-id:<user_id>:wamid:<wamid>"` and 

@@ -1,5 +1,7 @@
 import { Logger } from '@nestjs/common';
+import { context, propagation } from '@opentelemetry/api';
 import { connection } from '../../redis/queues.js';
+import { messageE2eDuration } from '../../../otel/metrics.js';
 import type { OutboundMediaItemDto } from '../../pp/inbound/inbound.dto.js';
 import type { SendMessageResultDto } from './outbound.dto.js';
 
@@ -125,6 +127,28 @@ export async function sendMessage(opts: {
   consecutive: boolean | undefined;
   media: OutboundMediaItemDto[];
 }): Promise<{ status: number; body: SendMessageResultDto }> {
+  // Read W3C Baggage from the active context. processMessage /
+  // processMessageTimeout / pp/inbound/inbound.controller all wrap the call to
+  // sendMessage in context.with(ctxWithBaggage, ...) so context.active() here
+  // returns the enriched context — see otel/metrics.prompt.md for the full
+  // propagation chain. If the baggage is missing, we warn and skip the metric
+  // (self-monitoring signal: persistent WARN volume = propagation is broken).
+  const baggage = propagation.getBaggage(context.active());
+  const tsRaw = baggage?.getEntry('wabot.msg.ts_ms')?.value;
+  const originalTsMs = tsRaw ? parseInt(tsRaw, 10) : undefined;
+  if (originalTsMs === undefined || Number.isNaN(originalTsMs)) {
+    logger.warn(
+      `Missing wabot.msg.ts_ms baggage in sendMessage for user ${opts.user_id}, wamid=${opts.wamid} — delivery latency metric will not be recorded`,
+    );
+  }
+
+  const recordDeliveryOutcome = (
+    outcome: 'delivered' | 'inflight-expired' | 'whatsapp-error',
+  ): void => {
+    if (originalTsMs === undefined || Number.isNaN(originalTsMs)) return;
+    messageE2eDuration.record(Date.now() - originalTsMs, { outcome });
+  };
+
   if (!opts.consecutive) {
     const inflightKey =
       `{wabot:${env}}:inflight:user-id:${opts.user_id}:wamid:${opts.wamid}`;
@@ -150,6 +174,7 @@ export async function sendMessage(opts: {
       logger.warn(
         `Inflight window expired (no delivery) for user ${opts.user_id}, wamid ${opts.wamid}`,
       );
+      recordDeliveryOutcome('inflight-expired');
       return {
         status: 200,
         body: { delivered: false, reason: 'inflight-expired' },
@@ -167,6 +192,7 @@ export async function sendMessage(opts: {
       logger.error(
         `WhatsApp returned ${String(response.status)} for user ${opts.user_id}`,
       );
+      recordDeliveryOutcome('whatsapp-error');
       return { status: response.status, body: { delivered: false, reason: 'whatsapp-error' as const } };
     }
 
@@ -174,11 +200,13 @@ export async function sendMessage(opts: {
       logger.error(
         `WhatsApp returned ${String(response.status)} for user ${opts.user_id}`,
       );
+      recordDeliveryOutcome('whatsapp-error');
       return { status: response.status, body: { delivered: false, reason: 'whatsapp-error' as const } };
     }
 
   }
 
+  recordDeliveryOutcome('delivered');
   return { status: 200, body: { delivered: true } };
 }
 

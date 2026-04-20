@@ -37,5 +37,8 @@ Notes
 
 Observability
 * Set span attributes: wamid, message.type.
-* Record wabot.message.e2e_duration_ms histogram (see otel/metrics.prompt.md) with outcome attribute: "success" or "fallback".
+* Record wabot.message.e2e_duration_ms histogram (see otel/metrics.prompt.md) with outcome attribute: "success" or "fallback" — this is the HANDOFF/control-plane recording. The delivery-stage recording (outcomes "delivered", "inflight-expired", "whatsapp-error") is emitted by src/interfaces/whatsapp/outbound/outbound.service.ts/sendMessage(); see its prompt.md.
+* W3C Baggage for the delivery-stage recording: right after parsing message.timestamp, create `ctxWithBaggage` by attaching `wabot.msg.ts_ms` (string-encoded integer milliseconds) and `wabot.msg.wamid` via `propagation.setBaggage(ctx, ...)`. Use `ctxWithBaggage` for `propagation.inject(...)` into the carrier AND pass it as `ctx` to sendFallback. This lets sendMessage read `context.active()` and compute a true user-perceived delivery latency without threading the timestamp through DTOs.
+* In processMessageTimeout, rebuild ctx as `trace.setSpan(parentCtx, span)` where parentCtx comes from `propagation.extract` (which already surfaces the baggage that processMessage injected into the timeout job carrier) and wrap the sendMessage call in `context.with(ctx, ...)` for the same reason.
+* sendFallback wraps `waOutbound.sendMessage` in `context.with(opts.ctx, ...)` so baggage reaches sendMessage.
 * Set span error status and record exception on failures.

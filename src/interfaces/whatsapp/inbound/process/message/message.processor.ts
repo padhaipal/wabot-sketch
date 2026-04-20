@@ -1,5 +1,11 @@
 import { Logger } from '@nestjs/common';
-import { context, propagation, SpanStatusCode, trace } from '@opentelemetry/api';
+import {
+  context,
+  propagation,
+  SpanStatusCode,
+  trace,
+  type Context,
+} from '@opentelemetry/api';
 import type { Job, Processor, Queue } from 'bullmq';
 import type { OtelCarrier } from '../../../../../otel/otel.dto.js';
 import {
@@ -77,6 +83,11 @@ function buildFallbackMedia(): { type: 'audio' | 'video'; url: string }[] {
 async function sendFallback(opts: {
   userId: string;
   wamid: string;
+  // Context carrying W3C Baggage (e.g. wabot.msg.ts_ms) so sendMessage can
+  // record accurate user-perceived delivery latency. Wrap the sendMessage
+  // call in context.with(ctx, ...) so propagation.getBaggage(context.active())
+  // inside sendMessage returns the enriched baggage.
+  ctx: Context;
 }): Promise<void> {
   const media = buildFallbackMedia();
   if (media.length === 0) {
@@ -87,12 +98,14 @@ async function sendFallback(opts: {
   }
 
   try {
-    const result = await waOutbound.sendMessage({
-      user_id: opts.userId,
-      wamid: opts.wamid,
-      consecutive: undefined,
-      media,
-    });
+    const result = await context.with(opts.ctx, () =>
+      waOutbound.sendMessage({
+        user_id: opts.userId,
+        wamid: opts.wamid,
+        consecutive: undefined,
+        media,
+      }),
+    );
     if (result.body.delivered) {
       logger.log(`Fallback delivered for user ${opts.userId}`);
     } else {
@@ -208,11 +221,21 @@ export const processMessage: Processor = async (job: Job): Promise<void> => {
     span.setAttribute('wamid', wamid);
     span.setAttribute('message.type', message.type);
 
+    // Attach the original WhatsApp message timestamp (and wamid) as W3C Baggage
+    // so every downstream hop — the pp-sketch round trip AND the outbound
+    // WhatsApp send from this process — can read it via context.active() and
+    // record a true user-perceived delivery latency without threading the
+    // timestamp through DTOs. See otel/metrics.prompt.md.
+    const baggage = (propagation.getBaggage(ctx) ?? propagation.createBaggage())
+      .setEntry('wabot.msg.ts_ms', { value: String(messageTimestampMs) })
+      .setEntry('wabot.msg.wamid', { value: wamid });
+    const ctxWithBaggage = propagation.setBaggage(ctx, baggage);
+
     let isNew: boolean;
     try {
       isNew = await dedupeMessage(wamid);
     } catch {
-      await sendFallback({ userId, wamid });
+      await sendFallback({ userId, wamid, ctx: ctxWithBaggage });
       messageE2eDuration.record(Date.now() - messageTimestampMs, {
         outcome: 'fallback',
       });
@@ -224,8 +247,10 @@ export const processMessage: Processor = async (job: Job): Promise<void> => {
       return;
     }
 
+    // Inject from ctxWithBaggage (not ctx) so the carrier propagates both
+    // trace parent AND baggage to pp-sketch and onwards through the queue.
     const carrier: OtelCarrier = {};
-    propagation.inject(ctx, carrier);
+    propagation.inject(ctxWithBaggage, carrier);
 
     const readReceiptPromise = waOutbound
       .sendReadAndTypingIndicator(wamid)
@@ -255,7 +280,7 @@ export const processMessage: Processor = async (job: Job): Promise<void> => {
     try {
       isConsecutive = await checkConsecutive({ userId, wamid });
     } catch {
-      await sendFallback({ userId, wamid });
+      await sendFallback({ userId, wamid, ctx: ctxWithBaggage });
       messageE2eDuration.record(Date.now() - messageTimestampMs, {
         outcome: 'fallback',
       });
@@ -281,7 +306,7 @@ export const processMessage: Processor = async (job: Job): Promise<void> => {
     logger.error(
       `PP returned ${String(ppStatus)} for wamid=${wamid}`,
     );
-    await sendFallback({ userId, wamid });
+    await sendFallback({ userId, wamid, ctx: ctxWithBaggage });
     messageE2eDuration.record(Date.now() - messageTimestampMs, {
       outcome: 'fallback',
     });
@@ -314,6 +339,11 @@ export const processMessageTimeout: Processor = async (
     data.otel?.carrier ?? {},
   );
   const span = tracer.startSpan('process-message-timeout', {}, parentCtx);
+  // ctx carries parentCtx's baggage (wabot.msg.ts_ms, wabot.msg.wamid —
+  // injected by processMessage when it enqueued this job) plus the new span.
+  // Activating this ctx around sendMessage lets the outbound service read
+  // the original WhatsApp timestamp and record a true delivery latency.
+  const ctx = trace.setSpan(parentCtx, span);
 
   try {
     const userId = data.userId;
@@ -326,12 +356,14 @@ export const processMessageTimeout: Processor = async (
       throw new Error('Invalid timeout job data');
     }
 
-    const result = await waOutbound.sendMessage({
-      user_id: userId,
-      wamid,
-      consecutive: undefined,
-      media: buildFallbackMedia(),
-    });
+    const result = await context.with(ctx, () =>
+      waOutbound.sendMessage({
+        user_id: userId,
+        wamid,
+        consecutive: undefined,
+        media: buildFallbackMedia(),
+      }),
+    );
 
     if (result.body.delivered) {
       logger.log(`Timeout fallback delivered for user ${userId}`);
