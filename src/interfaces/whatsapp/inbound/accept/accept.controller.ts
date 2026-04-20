@@ -8,7 +8,12 @@ import {
   Req,
   Res,
 } from '@nestjs/common';
-import { context, propagation, SpanStatusCode, trace } from '@opentelemetry/api';
+import {
+  context,
+  propagation,
+  SpanStatusCode,
+  trace,
+} from '@opentelemetry/api';
 import type { OtelCarrier } from '../../../../otel/otel.dto.js';
 import type { Request, Response } from 'express';
 import { AcceptService } from './accept.service';

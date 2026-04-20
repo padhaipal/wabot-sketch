@@ -45,8 +45,7 @@ export async function sendMessage(opts: {
 
     return status;
   } catch (error: unknown) {
-    const detail =
-      error instanceof Error ? error.message : String(error);
+    const detail = error instanceof Error ? error.message : String(error);
     logger.error(`PP request failed for message ${opts.message.id}: ${detail}`);
     return 500;
   }

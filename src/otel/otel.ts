@@ -38,7 +38,7 @@ try {
 } catch (error: unknown) {
   const details =
     error instanceof Error ? `${error.name}: ${error.message}` : String(error);
-  // eslint-disable-next-line no-console
+
   console.error(`OTel SDK failed to start: ${details}`);
 }
 
@@ -49,15 +49,15 @@ const shutdown = (): void => {
   }
   shutdownStarted = true;
 
-  void sdk
-    .shutdown()
-    .catch((error: unknown) => {
-      const details =
-        error instanceof Error ? `${error.name}: ${error.message}` : String(error);
-      // eslint-disable-next-line no-console
-      console.error(`OTel SDK failed to shutdown: ${details}`);
-      process.exitCode = 1;
-    });
+  void sdk.shutdown().catch((error: unknown) => {
+    const details =
+      error instanceof Error
+        ? `${error.name}: ${error.message}`
+        : String(error);
+
+    console.error(`OTel SDK failed to shutdown: ${details}`);
+    process.exitCode = 1;
+  });
 };
 
 process.once('SIGTERM', shutdown);

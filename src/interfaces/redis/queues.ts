@@ -60,9 +60,7 @@ export function createWorker(
   });
 
   worker.on('failed', (job, err) => {
-    logger.error(
-      `Job ${String(job?.id)} failed on [${name}]: ${err.message}`,
-    );
+    logger.error(`Job ${String(job?.id)} failed on [${name}]: ${err.message}`);
   });
 
   workers.push(worker);

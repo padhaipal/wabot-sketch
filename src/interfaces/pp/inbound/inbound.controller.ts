@@ -10,13 +10,22 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { InternalApiKeyGuard } from '../../../validation/internal-api-key.guard.js';
-import { context, propagation, SpanStatusCode, trace } from '@opentelemetry/api';
+import {
+  context,
+  propagation,
+  SpanStatusCode,
+  trace,
+} from '@opentelemetry/api';
 import type { Request, Response } from 'express';
 import { Readable } from 'node:stream';
 import { validateJobData } from '../../../validation/validate-job.js';
 import type { OtelCarrier } from '../../../otel/otel.dto.js';
 import * as waOutbound from '../../whatsapp/outbound/outbound.service.js';
-import { DownloadMediaDto, SendMessageDto, SendNotificationDto } from './inbound.dto.js';
+import {
+  DownloadMediaDto,
+  SendMessageDto,
+  SendNotificationDto,
+} from './inbound.dto.js';
 
 const logger = new Logger('PpInboundController');
 
@@ -44,7 +53,9 @@ export class PpInboundController {
   ): Promise<void> {
     const validation = validateJobData(SendMessageDto, body);
     if (!validation.success) {
-      logger.warn(`SendMessage validation failed: ${validation.errors.join('; ')}`);
+      logger.warn(
+        `SendMessage validation failed: ${validation.errors.join('; ')}`,
+      );
       response.status(400).json({ errors: validation.errors });
       return;
     }
@@ -90,7 +101,9 @@ export class PpInboundController {
   ): Promise<void> {
     const validation = validateJobData(SendNotificationDto, body);
     if (!validation.success) {
-      logger.warn(`SendNotification validation failed: ${validation.errors.join('; ')}`);
+      logger.warn(
+        `SendNotification validation failed: ${validation.errors.join('; ')}`,
+      );
       response.status(400).json({ errors: validation.errors });
       return;
     }
@@ -119,7 +132,9 @@ export class PpInboundController {
   ): Promise<void> {
     const validation = validateJobData(DownloadMediaDto, body);
     if (!validation.success) {
-      logger.warn(`DownloadMedia validation failed: ${validation.errors.join('; ')}`);
+      logger.warn(
+        `DownloadMedia validation failed: ${validation.errors.join('; ')}`,
+      );
       response.status(400).json({ errors: validation.errors });
       return;
     }
@@ -127,7 +142,11 @@ export class PpInboundController {
     const dto = validation.dto;
     const carrier: OtelCarrier = dto.otel.carrier;
     const parentCtx = propagation.extract(context.active(), carrier);
-    const span = this.tracer.startSpan('pp-download-media', undefined, parentCtx);
+    const span = this.tracer.startSpan(
+      'pp-download-media',
+      undefined,
+      parentCtx,
+    );
     const ctx = trace.setSpan(parentCtx, span);
 
     try {
@@ -140,7 +159,9 @@ export class PpInboundController {
       const readable =
         stream instanceof Readable
           ? stream
-          : Readable.fromWeb(stream as unknown as import('node:stream/web').ReadableStream);
+          : Readable.fromWeb(
+              stream as unknown as import('node:stream/web').ReadableStream,
+            );
 
       await new Promise<void>((resolve, reject) => {
         readable.pipe(response);
@@ -160,7 +181,9 @@ export class PpInboundController {
         `downloadMedia failed: ${error instanceof Error ? error.message : String(error)}`,
       );
       if (!response.headersSent) {
-        response.status(extractHttpStatus(error)).json({ error: 'Download failed' });
+        response
+          .status(extractHttpStatus(error))
+          .json({ error: 'Download failed' });
       }
     } finally {
       span.end();
@@ -188,8 +211,14 @@ export class PpInboundController {
     }
 
     const validMediaTypes = ['audio', 'video', 'image', 'sticker'] as const;
-    if (!mediaType || !validMediaTypes.includes(mediaType as typeof validMediaTypes[number])) {
-      response.status(400).json({ error: 'X-Media-Type header must be one of: audio, video, image, sticker' });
+    if (
+      !mediaType ||
+      !validMediaTypes.includes(mediaType as (typeof validMediaTypes)[number])
+    ) {
+      response.status(400).json({
+        error:
+          'X-Media-Type header must be one of: audio, video, image, sticker',
+      });
       return;
     }
 
@@ -238,7 +267,9 @@ export class PpInboundController {
         `uploadMedia failed: ${error instanceof Error ? error.message : String(error)}`,
       );
       if (!response.headersSent) {
-        response.status(extractHttpStatus(error)).json({ error: 'Upload failed' });
+        response
+          .status(extractHttpStatus(error))
+          .json({ error: 'Upload failed' });
       }
     } finally {
       span.end();

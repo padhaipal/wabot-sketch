@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { ConsoleLogger } from '@nestjs/common';
 import { logs, SeverityNumber } from '@opentelemetry/api-logs';
 
@@ -94,9 +93,7 @@ export class OtelLogger extends ConsoleLogger {
           : JSON.stringify(opts.message),
       attributes: {
         ...(logContext !== undefined ? { 'log.context': logContext } : {}),
-        ...(stack !== undefined
-          ? { 'exception.stacktrace': stack }
-          : {}),
+        ...(stack !== undefined ? { 'exception.stacktrace': stack } : {}),
       },
     });
   }

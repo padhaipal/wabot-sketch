@@ -25,10 +25,7 @@ export function validateJobData<T extends object>(
   return { success: true, dto: instance };
 }
 
-function flattenErrors(
-  errors: ValidationError[],
-  prefix = '',
-): string[] {
+function flattenErrors(errors: ValidationError[], prefix = ''): string[] {
   return errors.flatMap((err) => {
     const path = prefix ? `${prefix}.${err.property}` : err.property;
 

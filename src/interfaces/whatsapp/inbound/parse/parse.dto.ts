@@ -1,10 +1,5 @@
 import { Type } from 'class-transformer';
-import {
-  IsArray,
-  IsObject,
-  IsString,
-  ValidateNested,
-} from 'class-validator';
+import { IsArray, IsObject, IsString, ValidateNested } from 'class-validator';
 import { OtelCarrierDto } from '../../../../otel/otel.dto.js';
 
 export class ParseWebhookChangeDto {

@@ -50,8 +50,7 @@ async function redisWithRetry<T>(opts: {
     } catch (error: unknown) {
       const remaining = deadline - Date.now();
       if (remaining <= delay) {
-        const detail =
-          error instanceof Error ? error.message : String(error);
+        const detail = error instanceof Error ? error.message : String(error);
         logger.error(`Redis ${opts.label} failed after retries: ${detail}`);
         throw error;
       }
@@ -115,9 +114,7 @@ async function sendFallback(opts: {
     }
   } catch (error: unknown) {
     const detail = error instanceof Error ? error.message : String(error);
-    logger.error(
-      `Fallback message failed for user ${opts.userId}: ${detail}`,
-    );
+    logger.error(`Fallback message failed for user ${opts.userId}: ${detail}`);
   }
 }
 
@@ -157,8 +154,7 @@ async function enqueueTimeout(opts: {
     } catch (error: unknown) {
       const remaining = deadline - Date.now();
       if (remaining <= retryDelay) {
-        const detail =
-          error instanceof Error ? error.message : String(error);
+        const detail = error instanceof Error ? error.message : String(error);
         logger.error(`Failed to enqueue timeout job after retries: ${detail}`);
         throw new Error('Failed to enqueue timeout job');
       }
@@ -176,10 +172,8 @@ async function checkConsecutive(opts: {
   userId: string;
   wamid: string;
 }): Promise<boolean> {
-  const consecutiveKey =
-    `{wabot:${env}}:consecutive-check:user-id:${opts.userId}`;
-  const inflightKey =
-    `{wabot:${env}}:inflight:user-id:${opts.userId}:wamid:${opts.wamid}`;
+  const consecutiveKey = `{wabot:${env}}:consecutive-check:user-id:${opts.userId}`;
+  const inflightKey = `{wabot:${env}}:inflight:user-id:${opts.userId}:wamid:${opts.wamid}`;
 
   const result = await redisWithRetry({
     operation: () =>
@@ -198,8 +192,7 @@ async function checkConsecutive(opts: {
 export const processMessage: Processor = async (job: Job): Promise<void> => {
   const parentCtx = propagation.extract(
     context.active(),
-    (job.data as { otel?: { carrier?: OtelCarrier } })?.otel
-      ?.carrier ?? {},
+    (job.data as { otel?: { carrier?: OtelCarrier } })?.otel?.carrier ?? {},
   );
   const span = tracer.startSpan('process-message', {}, parentCtx);
   const ctx = trace.setSpan(parentCtx, span);
@@ -255,9 +248,10 @@ export const processMessage: Processor = async (job: Job): Promise<void> => {
     const readReceiptPromise = waOutbound
       .sendReadAndTypingIndicator(wamid)
       .catch((error: unknown) => {
-        const detail =
-          error instanceof Error ? error.message : String(error);
-        logger.warn(`Read/typing indicator failed for wamid=${wamid}: ${detail}`);
+        const detail = error instanceof Error ? error.message : String(error);
+        logger.warn(
+          `Read/typing indicator failed for wamid=${wamid}: ${detail}`,
+        );
       });
 
     const timeoutPromise = enqueueTimeout({
@@ -303,9 +297,7 @@ export const processMessage: Processor = async (job: Job): Promise<void> => {
       return;
     }
 
-    logger.error(
-      `PP returned ${String(ppStatus)} for wamid=${wamid}`,
-    );
+    logger.error(`PP returned ${String(ppStatus)} for wamid=${wamid}`);
     await sendFallback({ userId, wamid, ctx: ctxWithBaggage });
     messageE2eDuration.record(Date.now() - messageTimestampMs, {
       outcome: 'fallback',

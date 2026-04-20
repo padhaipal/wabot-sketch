@@ -28,9 +28,7 @@ function authHeaders(): Record<string, string> {
   };
 }
 
-export async function sendReadAndTypingIndicator(
-  wamid: string,
-): Promise<void> {
+export async function sendReadAndTypingIndicator(wamid: string): Promise<void> {
   const body = {
     messaging_product: 'whatsapp',
     status: 'read',
@@ -150,10 +148,8 @@ export async function sendMessage(opts: {
   };
 
   if (!opts.consecutive) {
-    const inflightKey =
-      `{wabot:${env}}:inflight:user-id:${opts.user_id}:wamid:${opts.wamid}`;
-    const consecutiveKey =
-      `{wabot:${env}}:consecutive-check:user-id:${opts.user_id}`;
+    const inflightKey = `{wabot:${env}}:inflight:user-id:${opts.user_id}:wamid:${opts.wamid}`;
+    const consecutiveKey = `{wabot:${env}}:consecutive-check:user-id:${opts.user_id}`;
 
     const result = await connection.eval(
       INFLIGHT_DEL_LUA,
@@ -193,7 +189,10 @@ export async function sendMessage(opts: {
         `WhatsApp returned ${String(response.status)} for user ${opts.user_id}`,
       );
       recordDeliveryOutcome('whatsapp-error');
-      return { status: response.status, body: { delivered: false, reason: 'whatsapp-error' as const } };
+      return {
+        status: response.status,
+        body: { delivered: false, reason: 'whatsapp-error' as const },
+      };
     }
 
     if (response.status >= 500) {
@@ -201,9 +200,11 @@ export async function sendMessage(opts: {
         `WhatsApp returned ${String(response.status)} for user ${opts.user_id}`,
       );
       recordDeliveryOutcome('whatsapp-error');
-      return { status: response.status, body: { delivered: false, reason: 'whatsapp-error' as const } };
+      return {
+        status: response.status,
+        body: { delivered: false, reason: 'whatsapp-error' as const },
+      };
     }
-
   }
 
   recordDeliveryOutcome('delivered');
@@ -239,9 +240,7 @@ export async function sendNotification(opts: {
       const errorCode = body.error?.code;
 
       if (errorCode === 130429) {
-        logger.warn(
-          `WhatsApp rate-limit (130429) for user ${opts.user_id}`,
-        );
+        logger.warn(`WhatsApp rate-limit (130429) for user ${opts.user_id}`);
         return { status: 429, delivered: false, error_code: 130429 };
       }
 
@@ -255,7 +254,11 @@ export async function sendNotification(opts: {
       logger.error(
         `WhatsApp returned ${String(response.status)} for notification to user ${opts.user_id}: ${body.error?.message ?? 'unknown'}`,
       );
-      return { status: response.status, delivered: false, error_code: errorCode };
+      return {
+        status: response.status,
+        delivered: false,
+        error_code: errorCode,
+      };
     }
   }
 
@@ -281,7 +284,8 @@ export async function downloadMedia(
     throw new Error(`Media download failed with ${String(response.status)}`);
   }
 
-  const contentType = response.headers.get('content-type') ?? 'application/octet-stream';
+  const contentType =
+    response.headers.get('content-type') ?? 'application/octet-stream';
   const body = response.body;
   if (!body) {
     throw new Error('Response body is null');

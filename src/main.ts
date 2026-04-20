@@ -36,7 +36,6 @@ async function bootstrap(): Promise<void> {
   createWorker(QUEUE_NAMES.PROCESS_ERRORS, processError);
 
   const shutdown = async (signal: string): Promise<void> => {
-    // eslint-disable-next-line no-console
     console.log(`Received ${signal}, shutting down gracefully…`);
     await closeAll();
     await app.close();
@@ -50,7 +49,7 @@ async function bootstrap(): Promise<void> {
 void bootstrap().catch((error: unknown) => {
   const details =
     error instanceof Error ? `${error.name}: ${error.message}` : String(error);
-  // eslint-disable-next-line no-console
+
   console.error(`Application failed to start: ${details}`);
   process.exitCode = 1;
 });

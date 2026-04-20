@@ -1,13 +1,15 @@
 import { Logger } from '@nestjs/common';
-import { context, propagation, SpanStatusCode, trace } from '@opentelemetry/api';
+import {
+  context,
+  propagation,
+  SpanStatusCode,
+  trace,
+} from '@opentelemetry/api';
 import type { Job, Processor, Queue } from 'bullmq';
 import type { OtelCarrier } from '../../../../otel/otel.dto.js';
 import { plainToInstance } from 'class-transformer';
 import { validateSync } from 'class-validator';
-import {
-  createQueue,
-  QUEUE_NAMES,
-} from '../../../redis/queues.js';
+import { createQueue, QUEUE_NAMES } from '../../../redis/queues.js';
 import { validateJobData } from '../../../../validation/validate-job.js';
 import { MessageJobDto } from '../process/message/message.dto.js';
 import { StatusJobDto } from '../process/status/status.dto.js';
@@ -118,9 +120,7 @@ function extractJobs(opts: {
           if (valid) {
             result.statuses.push({ name: 'status', data: valid });
           } else {
-            logger.warn(
-              `[HPTRACE] Status dropped: errors=${errorDetail}`,
-            );
+            logger.warn(`[HPTRACE] Status dropped: errors=${errorDetail}`);
           }
         }
       }
@@ -134,9 +134,7 @@ function extractJobs(opts: {
           if (valid) {
             result.errors.push({ name: 'error', data: valid });
           } else {
-            logger.warn(
-              `[HPTRACE] Error entry dropped: errors=${errorDetail}`,
-            );
+            logger.warn(`[HPTRACE] Error entry dropped: errors=${errorDetail}`);
           }
         }
       }
@@ -168,8 +166,7 @@ async function bulkAddWithRetry(opts: {
     } catch (error: unknown) {
       const remaining = deadline - Date.now();
       if (remaining <= delay) {
-        const detail =
-          error instanceof Error ? error.message : String(error);
+        const detail = error instanceof Error ? error.message : String(error);
         logger.error(
           `Failed to enqueue ${opts.label} jobs after retries: ${detail}`,
         );
@@ -188,8 +185,7 @@ async function bulkAddWithRetry(opts: {
 export const parseParse: Processor = async (job: Job): Promise<void> => {
   const parentCtx = propagation.extract(
     context.active(),
-    (job.data as { otel?: { carrier?: OtelCarrier } })?.otel
-      ?.carrier ?? {},
+    (job.data as { otel?: { carrier?: OtelCarrier } })?.otel?.carrier ?? {},
   );
   const span = tracer.startSpan('process-parse', {}, parentCtx);
   const ctx = trace.setSpan(parentCtx, span);
