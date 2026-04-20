@@ -1,6 +1,5 @@
 import './otel/otel';
 import { join } from 'node:path';
-import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
@@ -44,10 +43,6 @@ async function bootstrap(): Promise<void> {
   };
   process.on('SIGTERM', () => void shutdown('SIGTERM'));
   process.on('SIGINT', () => void shutdown('SIGINT'));
-
-  const bootLogger = new Logger('Bootstrap');
-  bootLogger.warn('obs smoke test: WARN level');
-  bootLogger.error('obs smoke test: ERROR level');
 
   await app.listen(process.env.PORT ?? 3000);
 }
