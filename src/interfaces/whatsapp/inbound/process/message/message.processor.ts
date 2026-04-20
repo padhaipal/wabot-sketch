@@ -93,9 +93,13 @@ async function sendFallback(opts: {
       consecutive: undefined,
       media,
     });
-    logger.log(
-      `Fallback message result for user ${opts.userId}: delivered=${String(result.body.delivered)}`,
-    );
+    if (result.body.delivered) {
+      logger.log(`Fallback delivered for user ${opts.userId}`);
+    } else {
+      logger.warn(
+        `Fallback NOT delivered for user ${opts.userId}, wamid=${opts.wamid}, reason=${result.body.reason ?? 'unknown'}`,
+      );
+    }
   } catch (error: unknown) {
     const detail = error instanceof Error ? error.message : String(error);
     logger.error(
@@ -329,9 +333,13 @@ export const processMessageTimeout: Processor = async (
       media: buildFallbackMedia(),
     });
 
-    logger.log(
-      `Timeout fallback for user ${userId}: delivered=${String(result.body.delivered)}`,
-    );
+    if (result.body.delivered) {
+      logger.log(`Timeout fallback delivered for user ${userId}`);
+    } else {
+      logger.warn(
+        `Timeout fallback NOT delivered for user ${userId}, wamid=${wamid}, reason=${result.body.reason ?? 'unknown'}`,
+      );
+    }
   } catch (error: unknown) {
     span.setStatus({
       code: SpanStatusCode.ERROR,

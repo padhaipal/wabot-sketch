@@ -139,8 +139,16 @@ export async function sendMessage(opts: {
     );
 
     if (result === 0) {
-      logger.log(
-        `Inflight window expired for user ${opts.user_id}, wamid ${opts.wamid}`,
+      // Keys may be gone for two reasons:
+      //  (a) benign race: another invocation (processMessage vs processMessageTimeout)
+      //      atomically DEL'd both keys first and sent the message. User was served.
+      //  (b) bug: keys were never set (timeout fired before checkConsecutive, or
+      //      Redis error path invoked sendFallback with no prior inflight setup).
+      //      User receives nothing.
+      // We cannot distinguish (a) from (b) at this point in the code, so we warn on
+      // all of them. Persistent WARN volume here means (b) is happening.
+      logger.warn(
+        `Inflight window expired (no delivery) for user ${opts.user_id}, wamid ${opts.wamid}`,
       );
       return {
         status: 200,
