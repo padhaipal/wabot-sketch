@@ -8,5 +8,11 @@ export const messageE2eDuration = meter.createHistogram(
     description:
       'End-to-end milliseconds from WhatsApp message timestamp to wabot processing completion.',
     unit: 'ms',
+    advice: {
+      explicitBucketBoundaries: [
+        5, 10, 25, 50, 75, 100, 250, 500, 750, 1000, 2500, 5000, 7500, 10000,
+        15000, 20000, 25000, 30000, 60000,
+      ],
+    },
   },
 );
