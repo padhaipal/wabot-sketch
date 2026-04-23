@@ -49,10 +49,12 @@ export async function sendReadAndTypingIndicator(wamid: string): Promise<void> {
   }
 }
 
-const INFLIGHT_DEL_LUA = `
-local del1 = redis.call('DEL', KEYS[1])
-local del2 = redis.call('DEL', KEYS[2])
-if del1 == 1 and del2 == 1 then
+export const INFLIGHT_DEL_LUA = `
+local e1 = redis.call('EXISTS', KEYS[1])
+local e2 = redis.call('EXISTS', KEYS[2])
+if e1 == 1 and e2 == 1 then
+  redis.call('DEL', KEYS[1])
+  redis.call('DEL', KEYS[2])
   return 1
 else
   return 0

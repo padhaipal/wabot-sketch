@@ -101,7 +101,7 @@ async function sendFallback(opts: {
       waOutbound.sendMessage({
         user_id: opts.userId,
         wamid: opts.wamid,
-        consecutive: undefined,
+        consecutive: false,
         media,
       }),
     );
@@ -361,7 +361,7 @@ export const processMessageTimeout: Processor = async (
       waOutbound.sendMessage({
         user_id: userId,
         wamid,
-        consecutive: undefined,
+        consecutive: false,
         media: buildFallbackMedia(),
       }),
     );
