@@ -2,6 +2,7 @@ import './otel/otel';
 import { join } from 'node:path';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
+import { logs, SeverityNumber } from '@opentelemetry/api-logs';
 import { AppModule } from './app.module';
 import { OtelLogger } from './otel/otel-logger.js';
 import {
@@ -18,6 +19,19 @@ import { processStatus } from './interfaces/whatsapp/inbound/process/status/stat
 import { processError } from './interfaces/whatsapp/inbound/process/error/error.processor.js';
 
 async function bootstrap(): Promise<void> {
+  // Loki diagnostic probe: emit one log directly via the global OTel logs API
+  // BEFORE NestJS is involved. If this line shows up in Loki under
+  // service_name="wabot-sketch", the OTLP log pipeline is healthy and any
+  // missing-log problem is in the NestJS-Logger ↔ OtelLogger plumbing.
+  // If it does NOT appear, the OTLP export itself is broken (likely a
+  // Railway env var like OTEL_LOGS_EXPORTER=otlp, or Alloy is dropping logs).
+  logs.getLogger('wabot-startup-probe').emit({
+    severityNumber: SeverityNumber.INFO,
+    severityText: 'INFO',
+    body: `wabot-sketch startup probe ts=${new Date().toISOString()}`,
+    attributes: { 'probe.kind': 'startup', 'probe.version': '1' },
+  });
+
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     rawBody: true,
     logger: new OtelLogger(),

@@ -224,85 +224,94 @@ export const processMessage: Processor = async (job: Job): Promise<void> => {
       .setEntry('wabot.msg.wamid', { value: wamid });
     const ctxWithBaggage = propagation.setBaggage(ctx, baggage);
 
-    let isNew: boolean;
-    try {
-      isNew = await dedupeMessage(wamid);
-    } catch {
-      await sendFallback({ userId, wamid, ctx: ctxWithBaggage });
-      messageE2eDuration.record(Date.now() - messageTimestampMs, {
-        outcome: 'fallback',
+    // Activate ctxWithBaggage as the active context so every auto-instrumented
+    // span (Redis SET/EVAL inside dedupeMessage / checkConsecutive,
+    // BullMQ addJob inside enqueueTimeout, the HTTP POST inside
+    // ppOutbound.sendMessage) becomes a child of `process-message` instead of
+    // floating to whatever was active before. Without this wrap the trace
+    // shows only INFLIGHT_DEL_LUA spans and we can't tell whether
+    // CONSECUTIVE_CHECK_LUA actually executed.
+    await context.with(ctxWithBaggage, async () => {
+      let isNew: boolean;
+      try {
+        isNew = await dedupeMessage(wamid);
+      } catch {
+        await sendFallback({ userId, wamid, ctx: ctxWithBaggage });
+        messageE2eDuration.record(Date.now() - messageTimestampMs, {
+          outcome: 'fallback',
+        });
+        throw new Error('Redis dedupe unavailable');
+      }
+
+      if (!isNew) {
+        logger.log(`Duplicate message ignored: wamid=${wamid}`);
+        return;
+      }
+
+      // Inject from ctxWithBaggage (not ctx) so the carrier propagates both
+      // trace parent AND baggage to pp-sketch and onwards through the queue.
+      const carrier: OtelCarrier = {};
+      propagation.inject(ctxWithBaggage, carrier);
+
+      const readReceiptPromise = waOutbound
+        .sendReadAndTypingIndicator(wamid)
+        .catch((error: unknown) => {
+          const detail = error instanceof Error ? error.message : String(error);
+          logger.warn(
+            `Read/typing indicator failed for wamid=${wamid}: ${detail}`,
+          );
+        });
+
+      const timeoutPromise = enqueueTimeout({
+        userId,
+        wamid,
+        messageTimestamp: message.timestamp,
+        carrier,
       });
-      throw new Error('Redis dedupe unavailable');
-    }
 
-    if (!isNew) {
-      logger.log(`Duplicate message ignored: wamid=${wamid}`);
-      return;
-    }
+      const [, timeoutResult] = await Promise.allSettled([
+        readReceiptPromise,
+        timeoutPromise,
+      ]);
 
-    // Inject from ctxWithBaggage (not ctx) so the carrier propagates both
-    // trace parent AND baggage to pp-sketch and onwards through the queue.
-    const carrier: OtelCarrier = {};
-    propagation.inject(ctxWithBaggage, carrier);
+      if (timeoutResult.status === 'rejected') {
+        throw new Error('Failed to enqueue timeout job');
+      }
 
-    const readReceiptPromise = waOutbound
-      .sendReadAndTypingIndicator(wamid)
-      .catch((error: unknown) => {
-        const detail = error instanceof Error ? error.message : String(error);
-        logger.warn(
-          `Read/typing indicator failed for wamid=${wamid}: ${detail}`,
+      let isConsecutive: boolean;
+      try {
+        isConsecutive = await checkConsecutive({ userId, wamid });
+      } catch {
+        await sendFallback({ userId, wamid, ctx: ctxWithBaggage });
+        messageE2eDuration.record(Date.now() - messageTimestampMs, {
+          outcome: 'fallback',
+        });
+        throw new Error('Redis consecutive-check unavailable');
+      }
+
+      const ppStatus = await ppOutbound.sendMessage({
+        otel: { carrier },
+        message,
+        consecutive: isConsecutive,
+      });
+
+      if (ppStatus >= 200 && ppStatus < 300) {
+        logger.log(
+          `PP accepted message wamid=${wamid}, status=${String(ppStatus)}`,
         );
-      });
+        messageE2eDuration.record(Date.now() - messageTimestampMs, {
+          outcome: 'success',
+        });
+        return;
+      }
 
-    const timeoutPromise = enqueueTimeout({
-      userId,
-      wamid,
-      messageTimestamp: message.timestamp,
-      carrier,
-    });
-
-    const [, timeoutResult] = await Promise.allSettled([
-      readReceiptPromise,
-      timeoutPromise,
-    ]);
-
-    if (timeoutResult.status === 'rejected') {
-      throw new Error('Failed to enqueue timeout job');
-    }
-
-    let isConsecutive: boolean;
-    try {
-      isConsecutive = await checkConsecutive({ userId, wamid });
-    } catch {
+      logger.error(`PP returned ${String(ppStatus)} for wamid=${wamid}`);
       await sendFallback({ userId, wamid, ctx: ctxWithBaggage });
       messageE2eDuration.record(Date.now() - messageTimestampMs, {
         outcome: 'fallback',
       });
-      throw new Error('Redis consecutive-check unavailable');
-    }
-
-    const ppStatus = await ppOutbound.sendMessage({
-      otel: { carrier },
-      message,
-      consecutive: isConsecutive,
+      throw new Error(`PP returned ${String(ppStatus)}`);
     });
-
-    if (ppStatus >= 200 && ppStatus < 300) {
-      logger.log(
-        `PP accepted message wamid=${wamid}, status=${String(ppStatus)}`,
-      );
-      messageE2eDuration.record(Date.now() - messageTimestampMs, {
-        outcome: 'success',
-      });
-      return;
-    }
-
-    logger.error(`PP returned ${String(ppStatus)} for wamid=${wamid}`);
-    await sendFallback({ userId, wamid, ctx: ctxWithBaggage });
-    messageE2eDuration.record(Date.now() - messageTimestampMs, {
-      outcome: 'fallback',
-    });
-    throw new Error(`PP returned ${String(ppStatus)}`);
   } catch (error: unknown) {
     span.setStatus({
       code: SpanStatusCode.ERROR,
