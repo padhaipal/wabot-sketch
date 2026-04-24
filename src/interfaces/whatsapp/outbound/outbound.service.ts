@@ -2,6 +2,7 @@ import { Logger } from '@nestjs/common';
 import { context, propagation } from '@opentelemetry/api';
 import { connection } from '../../redis/queues.js';
 import { messageE2eDuration } from '../../../otel/metrics.js';
+import { toLogId } from '../../../otel/pii.js';
 import type { OutboundMediaItemDto } from '../../pp/inbound/inbound.dto.js';
 import type { SendMessageResultDto } from './outbound.dto.js';
 
@@ -108,7 +109,7 @@ async function sendSingleItem(opts: {
     const remaining = deadline - Date.now();
     if (remaining <= delay) {
       logger.error(
-        `WhatsApp 5XX persisted after retries for user ${opts.user_id}`,
+        `WhatsApp 5XX persisted after retries for user ${toLogId(opts.user_id)}`,
       );
       return response;
     }
@@ -138,7 +139,7 @@ export async function sendMessage(opts: {
   const originalTsMs = tsRaw ? parseInt(tsRaw, 10) : undefined;
   if (originalTsMs === undefined || Number.isNaN(originalTsMs)) {
     logger.warn(
-      `Missing wabot.msg.ts_ms baggage in sendMessage for user ${opts.user_id}, wamid=${opts.wamid} — delivery latency metric will not be recorded`,
+      `Missing wabot.msg.ts_ms baggage in sendMessage for user ${toLogId(opts.user_id)}, wamid=${opts.wamid} — delivery latency metric will not be recorded`,
     );
   }
 
@@ -170,7 +171,7 @@ export async function sendMessage(opts: {
       // We cannot distinguish (a) from (b) at this point in the code, so we warn on
       // all of them. Persistent WARN volume here means (b) is happening.
       logger.warn(
-        `Inflight window expired (no delivery) for user ${opts.user_id}, wamid ${opts.wamid}`,
+        `Inflight window expired (no delivery) for user ${toLogId(opts.user_id)}, wamid ${opts.wamid}`,
       );
       recordDeliveryOutcome('inflight-expired');
       return {
@@ -188,7 +189,7 @@ export async function sendMessage(opts: {
 
     if (response.status >= 400 && response.status < 500) {
       logger.error(
-        `WhatsApp returned ${String(response.status)} for user ${opts.user_id}`,
+        `WhatsApp returned ${String(response.status)} for user ${toLogId(opts.user_id)}`,
       );
       recordDeliveryOutcome('whatsapp-error');
       return {
@@ -199,7 +200,7 @@ export async function sendMessage(opts: {
 
     if (response.status >= 500) {
       logger.error(
-        `WhatsApp returned ${String(response.status)} for user ${opts.user_id}`,
+        `WhatsApp returned ${String(response.status)} for user ${toLogId(opts.user_id)}`,
       );
       recordDeliveryOutcome('whatsapp-error');
       return {
@@ -242,19 +243,21 @@ export async function sendNotification(opts: {
       const errorCode = body.error?.code;
 
       if (errorCode === 130429) {
-        logger.warn(`WhatsApp rate-limit (130429) for user ${opts.user_id}`);
+        logger.warn(
+          `WhatsApp rate-limit (130429) for user ${toLogId(opts.user_id)}`,
+        );
         return { status: 429, delivered: false, error_code: 130429 };
       }
 
       if (errorCode === 131047) {
         logger.error(
-          `Message failed: outside 24-hour window (131047) for user ${opts.user_id}`,
+          `Message failed: outside 24-hour window (131047) for user ${toLogId(opts.user_id)}`,
         );
         return { status: 403, delivered: false, error_code: 131047 };
       }
 
       logger.error(
-        `WhatsApp returned ${String(response.status)} for notification to user ${opts.user_id}: ${body.error?.message ?? 'unknown'}`,
+        `WhatsApp returned ${String(response.status)} for notification to user ${toLogId(opts.user_id)}: ${body.error?.message ?? 'unknown'}`,
       );
       return {
         status: response.status,

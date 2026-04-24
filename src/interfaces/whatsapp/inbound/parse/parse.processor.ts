@@ -105,7 +105,7 @@ function extractJobs(opts: {
             result.messages.push({ name: 'message', data: valid });
           } else {
             logger.warn(
-              `[HPTRACE] Message dropped: failed MessageJobDto validation [keys=${Object.keys(msgObj).join(',')}] errors=${errorDetail} fullMessage=${JSON.stringify(msg)}`,
+              `[HPTRACE] Message dropped: failed MessageJobDto validation [keys=${Object.keys(msgObj).join(',')}] errors=${errorDetail}`,
             );
           }
         }

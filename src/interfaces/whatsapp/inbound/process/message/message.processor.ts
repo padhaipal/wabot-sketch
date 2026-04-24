@@ -17,6 +17,7 @@ import { validateJobData } from '../../../../../validation/validate-job.js';
 import * as waOutbound from '../../../outbound/outbound.service.js';
 import * as ppOutbound from '../../../../pp/outbound/outbound.service.js';
 import { messageE2eDuration } from '../../../../../otel/metrics.js';
+import { toLogId } from '../../../../../otel/pii.js';
 import { MessageJobDto } from './message.dto.js';
 
 const logger = new Logger('MessageProcessor');
@@ -91,7 +92,7 @@ async function sendFallback(opts: {
   const media = buildFallbackMedia();
   if (media.length === 0) {
     logger.error(
-      `Cannot send fallback for user ${opts.userId}: FALL_BACK_MESSAGE_PUBLIC_URL is not configured`,
+      `Cannot send fallback for user ${toLogId(opts.userId)}: FALL_BACK_MESSAGE_PUBLIC_URL is not configured`,
     );
     return;
   }
@@ -106,15 +107,17 @@ async function sendFallback(opts: {
       }),
     );
     if (result.body.delivered) {
-      logger.log(`Fallback delivered for user ${opts.userId}`);
+      logger.log(`Fallback delivered for user ${toLogId(opts.userId)}`);
     } else {
       logger.warn(
-        `Fallback NOT delivered for user ${opts.userId}, wamid=${opts.wamid}, reason=${result.body.reason ?? 'unknown'}`,
+        `Fallback NOT delivered for user ${toLogId(opts.userId)}, wamid=${opts.wamid}, reason=${result.body.reason ?? 'unknown'}`,
       );
     }
   } catch (error: unknown) {
     const detail = error instanceof Error ? error.message : String(error);
-    logger.error(`Fallback message failed for user ${opts.userId}: ${detail}`);
+    logger.error(
+      `Fallback message failed for user ${toLogId(opts.userId)}: ${detail}`,
+    );
   }
 }
 
@@ -367,10 +370,10 @@ export const processMessageTimeout: Processor = async (
     );
 
     if (result.body.delivered) {
-      logger.log(`Timeout fallback delivered for user ${userId}`);
+      logger.log(`Timeout fallback delivered for user ${toLogId(userId)}`);
     } else {
       logger.warn(
-        `Timeout fallback NOT delivered for user ${userId}, wamid=${wamid}, reason=${result.body.reason ?? 'unknown'}`,
+        `Timeout fallback NOT delivered for user ${toLogId(userId)}, wamid=${wamid}, reason=${result.body.reason ?? 'unknown'}`,
       );
     }
   } catch (error: unknown) {
