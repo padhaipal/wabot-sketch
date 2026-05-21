@@ -24,6 +24,7 @@ const statusQueue: Queue = createQueue(QUEUE_NAMES.PROCESS_STATUS);
 const errorQueue: Queue = createQueue(QUEUE_NAMES.PROCESS_ERRORS);
 
 const businessAccountId = process.env.WHATSAPP_BUSINESS_ACCOUNT_ID;
+const allowedPhoneNumberId = process.env.PHONE_NUMBER_ID;
 
 function validateDto<T extends object>(
   cls: new () => T,
@@ -73,7 +74,7 @@ interface ParsedJobs {
   errors: { name: string; data: unknown }[];
 }
 
-function extractJobs(opts: {
+export function extractJobs(opts: {
   dto: ParseWebhookJobDto;
   carrier: OtelCarrier;
 }): ParsedJobs {
@@ -93,6 +94,15 @@ function extractJobs(opts: {
 
     for (const change of entry.changes) {
       const value = change.value;
+
+      const pnId = (value as { metadata?: { phone_number_id?: string } })
+        .metadata?.phone_number_id;
+      if (!allowedPhoneNumberId || pnId !== allowedPhoneNumberId) {
+        logger.log(
+          `[HPTRACE] Change dropped: phone_number_id=${pnId ?? 'missing'} != allowed=${allowedPhoneNumberId ?? 'unset'}`,
+        );
+        continue;
+      }
 
       if ('messages' in value && Array.isArray(value.messages)) {
         for (const msg of value.messages as unknown[]) {
