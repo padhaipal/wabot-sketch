@@ -1,6 +1,19 @@
 import { Type } from 'class-transformer';
-import { IsString, ValidateNested } from 'class-validator';
+import { IsArray, IsOptional, IsString, ValidateNested } from 'class-validator';
 import { OtelCarrierDto } from '../../../../../otel/otel.dto.js';
+
+export class StatusErrorDto {
+  @IsOptional()
+  code?: number;
+
+  @IsOptional()
+  @IsString()
+  title?: string;
+
+  @IsOptional()
+  @IsString()
+  message?: string;
+}
 
 export class StatusDto {
   @IsString()
@@ -14,6 +27,12 @@ export class StatusDto {
 
   @IsString()
   recipient_id!: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => StatusErrorDto)
+  errors?: StatusErrorDto[];
 }
 
 export class StatusJobDto {

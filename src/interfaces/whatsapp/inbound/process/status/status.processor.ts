@@ -33,6 +33,21 @@ export const processStatus: Processor = async (job: Job): Promise<void> => {
 
     span.setAttribute('status.id', status.id);
     span.setAttribute('status.status', status.status);
+
+    const errSummary =
+      status.errors && status.errors.length > 0
+        ? ` errors=${status.errors
+            .map(
+              (e) =>
+                `${e.code ?? '?'}:${e.title ?? '?'}${
+                  e.message ? `:${e.message}` : ''
+                }`,
+            )
+            .join('|')}`
+        : '';
+    logger.log(
+      `Status: ${status.status} wamid=${status.id} recipient=${status.recipient_id}${errSummary}`,
+    );
   } catch (error: unknown) {
     span.setStatus({
       code: SpanStatusCode.ERROR,
