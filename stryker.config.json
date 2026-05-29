@@ -10,7 +10,7 @@
     "!src/**/*.spec.ts",
     "!src/main.ts"
   ],
-  "thresholds": { "high": 80, "low": 60, "break": 78 },
+  "thresholds": { "high": 80, "low": 60, "break": 80 },
   "concurrency": 4,
   "incremental": true,
   "incrementalFile": ".stryker-tmp/incremental.json",
