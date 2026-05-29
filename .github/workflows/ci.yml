@@ -11,5 +11,11 @@ jobs:
   gate:
     runs-on: ubuntu-latest
     steps:
-      - name: Dummy gate
-        run: echo "ok"
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+      - name: Unit tests + coverage gate (>=80% global)
+        run: npm run test:cov
