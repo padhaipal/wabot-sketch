@@ -147,9 +147,7 @@ describe('sendNotification — log strings + body pass-through', () => {
     const res = makeRes();
     mockWaSendNotification.mockRejectedValue(new Error('nf-down'));
     await ctrl.sendNotification(validBody, res as never);
-    expect(errorSpy).toHaveBeenCalledWith(
-      'sendNotification failed: nf-down',
-    );
+    expect(errorSpy).toHaveBeenCalledWith('sendNotification failed: nf-down');
   });
 
   it('echoes the entire result object as body (not just .body)', async () => {
@@ -189,9 +187,7 @@ describe('downloadMedia — log + span name + extractHttpStatus boundaries', () 
 
   it('extractHttpStatus: error message embedding 404 → res.status(404)', async () => {
     const res = makeRes();
-    mockWaDownloadMedia.mockRejectedValue(
-      new Error('Media URL returned 404'),
-    );
+    mockWaDownloadMedia.mockRejectedValue(new Error('Media URL returned 404'));
     await ctrl.downloadMedia(validBody, res as never);
     expect(res.status).toHaveBeenCalledWith(404);
     expect(res.json).toHaveBeenCalledWith({ error: 'Download failed' });
@@ -320,8 +316,7 @@ describe('uploadMedia — guard ladder + otel JSON parse branches', () => {
     );
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith({
-      error:
-        'X-Media-Type header must be one of: audio, video, image, sticker',
+      error: 'X-Media-Type header must be one of: audio, video, image, sticker',
     });
   });
 

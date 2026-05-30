@@ -185,13 +185,7 @@ describe('OtelLogger', () => {
     it.each<
       [
         method: 'log' | 'error' | 'warn' | 'debug' | 'verbose' | 'fatal',
-        superMethod:
-          | 'log'
-          | 'error'
-          | 'warn'
-          | 'debug'
-          | 'verbose'
-          | 'fatal',
+        superMethod: 'log' | 'error' | 'warn' | 'debug' | 'verbose' | 'fatal',
       ]
     >([
       ['log', 'log'],

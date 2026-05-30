@@ -81,9 +81,7 @@ describe('PpMessageDto.TypeMatchesPayloadConstraint', () => {
         video: { url: 'https://v' },
       }),
     );
-    expect(
-      errs.some((e) => e.property === 'typeMatchesPayload'),
-    ).toBe(true);
+    expect(errs.some((e) => e.property === 'typeMatchesPayload')).toBe(true);
   });
 
   it.each(['audio', 'video', 'system'] as const)(

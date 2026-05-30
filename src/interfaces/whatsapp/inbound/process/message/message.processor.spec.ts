@@ -45,10 +45,7 @@ jest.mock('@opentelemetry/api', () => ({
   context: {
     active: () => mockContextActive(),
     with: (...a: unknown[]) =>
-      mockContextWith(
-        a[0] as never,
-        a[1] as unknown as () => unknown,
-      ),
+      mockContextWith(a[0] as never, a[1] as unknown as () => unknown),
   },
   SpanStatusCode: { ERROR: 2, OK: 1, UNSET: 0 },
 }));
@@ -67,7 +64,8 @@ const mockWaSendMessage = jest.fn();
 const mockWaSendReadAndTyping = jest.fn().mockResolvedValue(undefined);
 jest.mock('../../../outbound/outbound.service', () => ({
   sendMessage: (...a: unknown[]) => mockWaSendMessage(...a),
-  sendReadAndTypingIndicator: (...a: unknown[]) => mockWaSendReadAndTyping(...a),
+  sendReadAndTypingIndicator: (...a: unknown[]) =>
+    mockWaSendReadAndTyping(...a),
 }));
 
 const mockPpSendMessage = jest.fn();
@@ -87,10 +85,7 @@ jest.mock('../../../../../otel/pii', () => ({
 // --- Real imports under test --------------------------------------------
 import { Logger } from '@nestjs/common';
 import type { Job } from 'bullmq';
-import {
-  processMessage,
-  processMessageTimeout,
-} from './message.processor';
+import { processMessage, processMessageTimeout } from './message.processor';
 
 function makeJob(data: unknown, id = 'msg-job-1'): Job {
   return { id, data } as unknown as Job;
@@ -121,8 +116,8 @@ beforeEach(() => {
   mockTraceSetSpan.mockReturnValue('ctx-with-span');
   mockPropSetBaggage.mockReturnValue('ctx-with-baggage');
   mockStartSpan.mockReturnValue(fakeSpan);
-  mockContextWith.mockImplementation(
-    async (_ctx, fn) => (fn as () => unknown)(),
+  mockContextWith.mockImplementation(async (_ctx, fn) =>
+    (fn as () => unknown)(),
   );
   process.env.FALL_BACK_MESSAGE_PUBLIC_URL = 'https://cdn/fallback.mp3';
 });
@@ -139,12 +134,8 @@ describe('processMessage — happy path', () => {
     logSpy = jest
       .spyOn(Logger.prototype, 'log')
       .mockImplementation(() => undefined);
-    jest
-      .spyOn(Logger.prototype, 'warn')
-      .mockImplementation(() => undefined);
-    jest
-      .spyOn(Logger.prototype, 'error')
-      .mockImplementation(() => undefined);
+    jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
     mockConnSet.mockResolvedValue('OK'); // dedupe new
     mockConnEval.mockResolvedValue(0); // consecutive: false
     mockTimeoutAdd.mockResolvedValue({ id: 'timeout-1' });
@@ -249,7 +240,9 @@ describe('processMessage — early exits and fallback paths', () => {
   it('duplicate message (dedupe returns non-OK) → early return after log; no PP call', async () => {
     mockConnSet.mockResolvedValue(null);
     await processMessage(makeJob(validJobData));
-    expect(logSpy).toHaveBeenCalledWith('Duplicate message ignored: wamid=wamid.1');
+    expect(logSpy).toHaveBeenCalledWith(
+      'Duplicate message ignored: wamid=wamid.1',
+    );
     expect(mockPpSendMessage).not.toHaveBeenCalled();
     expect(mockMetricsRecord).not.toHaveBeenCalled();
   });
@@ -316,9 +309,7 @@ describe('processMessage — early exits and fallback paths', () => {
     await expect(processMessage(makeJob(validJobData))).rejects.toThrow(
       'PP returned 500',
     );
-    expect(errorSpy).toHaveBeenCalledWith(
-      'PP returned 500 for wamid=wamid.1',
-    );
+    expect(errorSpy).toHaveBeenCalledWith('PP returned 500 for wamid=wamid.1');
     expect(mockMetricsRecord).toHaveBeenCalledWith(expect.any(Number), {
       outcome: 'fallback',
     });
@@ -363,8 +354,7 @@ describe('sendFallback edge cases (exercised through processMessage PP-failure p
   });
 
   it('fallback infers media_type=audio from .mp3 URL', async () => {
-    process.env.FALL_BACK_MESSAGE_PUBLIC_URL =
-      'https://cdn/intro.mp3?cache=1';
+    process.env.FALL_BACK_MESSAGE_PUBLIC_URL = 'https://cdn/intro.mp3?cache=1';
     mockWaSendMessage.mockResolvedValue({ body: { delivered: true } });
     await expect(processMessage(makeJob(validJobData))).rejects.toThrow();
     const call = mockWaSendMessage.mock.calls[0][0] as {
@@ -538,7 +528,10 @@ describe('processMessageTimeout', () => {
         }),
       ),
     ).rejects.toThrow('wa-down');
-    expect(mockSpanSetStatus).toHaveBeenCalledWith({ code: 2, message: 'wa-down' });
+    expect(mockSpanSetStatus).toHaveBeenCalledWith({
+      code: 2,
+      message: 'wa-down',
+    });
     const recArg = mockSpanRecordException.mock.calls[0][0];
     expect(recArg).toBeInstanceOf(Error);
   });

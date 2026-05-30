@@ -128,7 +128,10 @@ describe('PpInboundController.sendMessage', () => {
     await ctrl.sendMessage(validBody, res as never);
     expect(res.status).toHaveBeenCalledWith(500);
     expect(res.json).toHaveBeenCalledWith({ error: 'Internal server error' });
-    expect(mockSpanSetStatus).toHaveBeenCalledWith({ code: 2, message: 'wa-down' });
+    expect(mockSpanSetStatus).toHaveBeenCalledWith({
+      code: 2,
+      message: 'wa-down',
+    });
     const recArg = mockSpanRecordException.mock.calls[0][0];
     expect(recArg).toBeInstanceOf(Error);
   });
@@ -281,26 +284,24 @@ describe('PpInboundController.uploadMedia', () => {
     });
   });
 
-  it.each<[string | undefined]>([
-    [undefined],
-    ['document'],
-    ['text'],
-    [''],
-  ])('400 when X-Media-Type is missing or invalid (%s)', async (mt) => {
-    const { res } = makeRes();
-    await ctrl.uploadMedia(
-      req(Buffer.from('x')) as never,
-      'audio/mp3',
-      mt,
-      undefined,
-      res as never,
-    );
-    expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.json).toHaveBeenCalledWith({
-      error:
-        'X-Media-Type header must be one of: audio, video, image, sticker',
-    });
-  });
+  it.each<[string | undefined]>([[undefined], ['document'], ['text'], ['']])(
+    '400 when X-Media-Type is missing or invalid (%s)',
+    async (mt) => {
+      const { res } = makeRes();
+      await ctrl.uploadMedia(
+        req(Buffer.from('x')) as never,
+        'audio/mp3',
+        mt,
+        undefined,
+        res as never,
+      );
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({
+        error:
+          'X-Media-Type header must be one of: audio, video, image, sticker',
+      });
+    },
+  );
 
   it('happy path: forwards rawBody + content_type + media_type, returns wa_media_url', async () => {
     const { res } = makeRes();

@@ -35,8 +35,14 @@ describe('whatsapp/outbound leaf DTOs', () => {
     [WaSendMessageMessageDto, { id: 'wamid' }],
     [WaSendMessageMessageDto, { id: 'wamid', message_status: 'accepted' }],
     [SendMessageDeliveredDto, { delivered: true }],
-    [SendMessageNotDeliveredDto, { delivered: false, reason: 'inflight-expired' }],
-    [SendMessageNotDeliveredDto, { delivered: false, reason: 'whatsapp-error' }],
+    [
+      SendMessageNotDeliveredDto,
+      { delivered: false, reason: 'inflight-expired' },
+    ],
+    [
+      SendMessageNotDeliveredDto,
+      { delivered: false, reason: 'whatsapp-error' },
+    ],
     [WaUploadMediaResponseDto, { id: 'media-1' }],
     [UploadMediaResultDto, { wa_media_url: 'https://x' }],
   ])('%p validates a good payload', (cls, src) => {
@@ -111,9 +117,13 @@ describe('WaSendMessageRequestDto', () => {
     'accepts type=%s with the matching nested payload',
     (type) => {
       const payload =
-        type === 'text' ? { text: { body: 'hi' } } : { [type]: { link: 'https://x' } };
+        type === 'text'
+          ? { text: { body: 'hi' } }
+          : { [type]: { link: 'https://x' } };
       expect(
-        validateSync(build(WaSendMessageRequestDto, { ...base, type, ...payload })),
+        validateSync(
+          build(WaSendMessageRequestDto, { ...base, type, ...payload }),
+        ),
       ).toHaveLength(0);
     },
   );
