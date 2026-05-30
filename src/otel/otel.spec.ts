@@ -50,7 +50,6 @@ jest.mock('@opentelemetry/sdk-node', () => ({
 
 function importOtel(): void {
   jest.isolateModules(() => {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     require('./otel');
   });
 }

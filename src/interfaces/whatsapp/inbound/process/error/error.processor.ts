@@ -13,6 +13,9 @@ import { ErrorJobDto } from './error.dto.js';
 const logger = new Logger('ErrorProcessor');
 const tracer = trace.getTracer('error-processor');
 
+// BullMQ Processor signature requires async; body is sync but `async` keeps
+// thrown errors as job-rejections rather than uncaught sync throws.
+// eslint-disable-next-line @typescript-eslint/require-await
 export const processError: Processor = async (job: Job): Promise<void> => {
   const parentCtx = propagation.extract(
     context.active(),

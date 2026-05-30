@@ -302,7 +302,6 @@ describe('sendMessage — payload shapes', () => {
       user_id: '919999990001',
       wamid: 'wamid.1',
       consecutive: true,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       media: [item as any],
     });
     const body = JSON.parse(

@@ -45,7 +45,7 @@ jest.mock('@opentelemetry/api', () => ({
   context: {
     active: () => mockContextActive(),
     with: (...a: unknown[]) =>
-      mockContextWith(a[0] as never, a[1] as unknown as () => unknown),
+      mockContextWith(a[0] as never, a[1] as () => unknown),
   },
   SpanStatusCode: { ERROR: 2, OK: 1, UNSET: 0 },
 }));

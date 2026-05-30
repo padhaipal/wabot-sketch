@@ -66,7 +66,7 @@ function loadModule(): { parseParse: (job: unknown) => Promise<void> } {
     }));
     process.env.WHATSAPP_BUSINESS_ACCOUNT_ID = WABA;
     process.env.PHONE_NUMBER_ID = ALLOWED_PN;
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+
     mod = require('./parse.processor');
   });
   return mod;
@@ -504,7 +504,7 @@ describe('WHATSAPP_BUSINESS_ACCOUNT_ID unset', () => {
       }));
       delete process.env.WHATSAPP_BUSINESS_ACCOUNT_ID;
       process.env.PHONE_NUMBER_ID = ALLOWED_PN;
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
+
       mod = require('./parse.processor');
     });
     await mod.parseParse(
