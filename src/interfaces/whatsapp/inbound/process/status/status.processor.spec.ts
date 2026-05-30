@@ -162,9 +162,7 @@ describe('processStatus', () => {
 
   it('invalid data: logs each constraint, sets span ERROR + recordException, rethrows', async () => {
     await expect(
-      processStatus(
-        makeJob({ otel: validData.otel, status: { id: 123 } }),
-      ),
+      processStatus(makeJob({ otel: validData.otel, status: { id: 123 } })),
     ).rejects.toThrow('Invalid status job data');
     expect(errorSpy).toHaveBeenCalledWith(
       expect.stringMatching(

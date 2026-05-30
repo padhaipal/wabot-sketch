@@ -71,15 +71,11 @@ afterEach(() => {
 
 describe('graphUrl + authHeaders', () => {
   it('builds the exact v21.0 messages URL and Bearer + JSON headers', async () => {
-    const fetchSpy = jest
-      .fn()
-      .mockResolvedValue(mockResponse({ status: 200 }));
+    const fetchSpy = jest.fn().mockResolvedValue(mockResponse({ status: 200 }));
     global.fetch = fetchSpy as never;
     await sendReadAndTypingIndicator('wamid.1');
     const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe(
-      'https://graph.facebook.com/v21.0/test-phone-id/messages',
-    );
+    expect(url).toBe('https://graph.facebook.com/v21.0/test-phone-id/messages');
     const headers = init.headers as Record<string, string>;
     expect(headers.Authorization).toBe('Bearer test-token');
     expect(headers['Content-Type']).toBe('application/json');
@@ -106,9 +102,7 @@ describe('CLAIM_LUA', () => {
     expect(evalCall[0]).toBe(CLAIM_LUA);
     expect(evalCall[1]).toBe(2);
     expect(evalCall[2]).toMatch(/inflight:user-id:919999990001:wamid:wamid\.1/);
-    expect(evalCall[3]).toMatch(
-      /consecutive-check:user-id:919999990001/,
-    );
+    expect(evalCall[3]).toMatch(/consecutive-check:user-id:919999990001/);
   });
 });
 
@@ -412,9 +406,9 @@ describe('sendFallbackRaw / sendFallbackWithRetry', () => {
     expect(errorSpy).toHaveBeenCalledWith(
       expect.stringContaining('Fallback failed twice for user'),
     );
-    expect(errorSpy.mock.calls.some((c) => String(c[0]).includes('giving up'))).toBe(
-      true,
-    );
+    expect(
+      errorSpy.mock.calls.some((c) => String(c[0]).includes('giving up')),
+    ).toBe(true);
     jest.useRealTimers();
   });
 });
@@ -453,7 +447,9 @@ describe('recreateInflightWithRetry', () => {
       media: [{ type: 'text', body: 'hi' }],
     });
     expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('Inflight recreate failed (1st attempt) for user'),
+      expect.stringContaining(
+        'Inflight recreate failed (1st attempt) for user',
+      ),
     );
     expect(mockConnSet).toHaveBeenCalledTimes(2);
     // No fallback was triggered: only the original fetch ran.
@@ -477,7 +473,9 @@ describe('recreateInflightWithRetry', () => {
       media: [{ type: 'text', body: 'hi' }],
     });
     expect(errorSpy).toHaveBeenCalledWith(
-      expect.stringContaining('Inflight recreate failed (2nd attempt) for user'),
+      expect.stringContaining(
+        'Inflight recreate failed (2nd attempt) for user',
+      ),
     );
   });
 
@@ -644,9 +642,7 @@ describe('sendNotification — extra log shape', () => {
       user_id: '919999990001',
       media: [{ type: 'text', body: 'hi' }],
     });
-    expect(errorSpy).toHaveBeenCalledWith(
-      expect.stringContaining('unknown'),
-    );
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('unknown'));
   });
 });
 

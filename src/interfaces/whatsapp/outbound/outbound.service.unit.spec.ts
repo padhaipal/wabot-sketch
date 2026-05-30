@@ -63,7 +63,10 @@ function mockResponse(opts: {
     json: async () => opts.json ?? {},
     text: async () => opts.text ?? '',
     body: opts.body ?? null,
-    headers: { get: (k: string) => (k === 'content-type' ? opts.contentType ?? null : null) },
+    headers: {
+      get: (k: string) =>
+        k === 'content-type' ? (opts.contentType ?? null) : null,
+    },
   } as unknown as Response;
 }
 
@@ -183,9 +186,7 @@ describe('sendMessage — WA returns 4XX', () => {
   };
 
   beforeEach(() => {
-    jest
-      .spyOn(Logger.prototype, 'error')
-      .mockImplementation(() => undefined);
+    jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
     jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
     jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
   });
@@ -215,9 +216,7 @@ describe('sendMessage — WA returns 4XX', () => {
     const fetchSpy = jest
       .fn()
       // first send: 400
-      .mockResolvedValueOnce(
-        mockResponse({ status: 400, text: '{}' }),
-      )
+      .mockResolvedValueOnce(mockResponse({ status: 400, text: '{}' }))
       // fallback first attempt: succeeds
       .mockResolvedValue(mockResponse({ status: 200 }));
     global.fetch = fetchSpy as never;
@@ -253,9 +252,11 @@ describe('sendMessage — WA returns 4XX', () => {
   it('safeReadErrorBody: malformed JSON falls back to sanitized text', async () => {
     mockConnEval.mockResolvedValue(25_000);
     mockConnSet.mockResolvedValue('OK');
-    global.fetch = jest.fn().mockResolvedValue(
-      mockResponse({ status: 400, text: 'not json at all' }),
-    ) as never;
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(
+        mockResponse({ status: 400, text: 'not json at all' }),
+      ) as never;
     const out = await sendMessage({ ...baseOpts, consecutive: false });
     expect(out.status).toBe(400);
   });
@@ -275,17 +276,14 @@ describe('sendMessage — WA returns 4XX', () => {
 
 describe('sendMessage — payload shapes', () => {
   beforeEach(() => {
-    jest
-      .spyOn(Logger.prototype, 'error')
-      .mockImplementation(() => undefined);
+    jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
     jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
   });
   afterEach(() => jest.restoreAllMocks());
 
-  it.each<[
-    { type: string; url?: string; body?: string },
-    Record<string, unknown>,
-  ]>([
+  it.each<
+    [{ type: string; url?: string; body?: string }, Record<string, unknown>]
+  >([
     [{ type: 'text', body: 'hello' }, { text: { body: 'hello' } }],
     [
       { type: 'audio', url: 'https://cdn/a.mp3' },
@@ -298,9 +296,7 @@ describe('sendMessage — payload shapes', () => {
     ],
     [{ type: 'image', url: 'media-img-1' }, { image: { id: 'media-img-1' } }],
   ])('builds the WA payload correctly for %p', async (item, expectedExtras) => {
-    const fetchSpy = jest
-      .fn()
-      .mockResolvedValue(mockResponse({ status: 200 }));
+    const fetchSpy = jest.fn().mockResolvedValue(mockResponse({ status: 200 }));
     global.fetch = fetchSpy as never;
     await sendMessage({
       user_id: '919999990001',
@@ -426,7 +422,10 @@ describe('downloadMedia', () => {
 
   it('defaults content_type to application/octet-stream when header is missing', async () => {
     global.fetch = jest.fn().mockResolvedValue(
-      mockResponse({ status: 200, body: {} as unknown as NodeJS.ReadableStream }),
+      mockResponse({
+        status: 200,
+        body: {} as unknown as NodeJS.ReadableStream,
+      }),
     ) as never;
     const out = await downloadMedia('https://wa/m/1');
     expect(out.content_type).toBe('application/octet-stream');
@@ -482,9 +481,11 @@ describe('uploadMedia', () => {
   ])(
     'MIME %s + media_type %s → filename %s',
     async (content_type, media_type, expectedName) => {
-      const fetchSpy = jest.fn().mockResolvedValue(
-        mockResponse({ status: 200, json: { id: 'wa://m/1' } }),
-      );
+      const fetchSpy = jest
+        .fn()
+        .mockResolvedValue(
+          mockResponse({ status: 200, json: { id: 'wa://m/1' } }),
+        );
       global.fetch = fetchSpy as never;
       const out = await uploadMedia({
         data: Buffer.from('x'),
@@ -501,9 +502,11 @@ describe('uploadMedia', () => {
   );
 
   it('throws on 4XX with sanitized error log', async () => {
-    global.fetch = jest.fn().mockResolvedValue(
-      mockResponse({ status: 422, text: 'bad payload' }),
-    ) as never;
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(
+        mockResponse({ status: 422, text: 'bad payload' }),
+      ) as never;
     await expect(
       uploadMedia({
         data: Buffer.from('x'),
@@ -514,9 +517,11 @@ describe('uploadMedia', () => {
   });
 
   it('throws on 5XX', async () => {
-    global.fetch = jest.fn().mockResolvedValue(
-      mockResponse({ status: 503, text: 'upstream down' }),
-    ) as never;
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(
+        mockResponse({ status: 503, text: 'upstream down' }),
+      ) as never;
     await expect(
       uploadMedia({
         data: Buffer.from('x'),

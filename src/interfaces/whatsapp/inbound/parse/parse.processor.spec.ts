@@ -333,9 +333,9 @@ describe('parseParse — main processor', () => {
 
   it('invalid DTO → logs + rethrows', async () => {
     const { parseParse } = loadParseParse();
-    await expect(parseParse(makeJob({ body: { entry: 'nope' } }))).rejects.toThrow(
-      'Invalid parse job data',
-    );
+    await expect(
+      parseParse(makeJob({ body: { entry: 'nope' } })),
+    ).rejects.toThrow('Invalid parse job data');
   });
 
   it('happy path: extracts messages/statuses/errors and bulk-adds each into the right queue', async () => {

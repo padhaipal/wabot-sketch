@@ -68,9 +68,7 @@ describe('pp/outbound.sendMessage', () => {
 
   it('on 2xx (200, 202, 299): logs accept + returns the status', async () => {
     for (const status of [200, 202, 299]) {
-      global.fetch = jest
-        .fn()
-        .mockResolvedValue(makeResponse(status)) as never;
+      global.fetch = jest.fn().mockResolvedValue(makeResponse(status)) as never;
       const out = await sendMessage({ otel, message });
       expect(out).toBe(status);
     }

@@ -16,8 +16,7 @@ const APP_SECRET = 'test-app-secret';
 
 function sign(body: Buffer): string {
   return (
-    'sha256=' +
-    createHmac('sha256', APP_SECRET).update(body).digest('hex')
+    'sha256=' + createHmac('sha256', APP_SECRET).update(body).digest('hex')
   );
 }
 

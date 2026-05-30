@@ -351,9 +351,7 @@ describe('validateDto error-detail formatting', () => {
                   field: 'messages',
                   value: {
                     metadata: { phone_number_id: ALLOWED_PN },
-                    statuses: [
-                      { id: 'wamid.s' /* missing required fields */ },
-                    ],
+                    statuses: [{ id: 'wamid.s' /* missing required fields */ }],
                   },
                 },
               ],
@@ -426,9 +424,7 @@ describe('validateDto error-detail formatting', () => {
         },
       }),
     );
-    expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('text:body:'),
-    );
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('text:body:'));
   });
 });
 

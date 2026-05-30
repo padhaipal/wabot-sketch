@@ -81,10 +81,7 @@ jest.mock('../../../../../otel/pii', () => ({
 
 import { Logger } from '@nestjs/common';
 import type { Job } from 'bullmq';
-import {
-  processMessage,
-  processMessageTimeout,
-} from './message.processor';
+import { processMessage, processMessageTimeout } from './message.processor';
 
 function makeJob(data: unknown, id = 'msg-job-1'): Job {
   return { id, data } as unknown as Job;
@@ -179,11 +176,9 @@ describe('enqueueTimeout — delay arithmetic', () => {
     // Way past the message timestamp + 20s.
     jest.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000);
     await processMessage(makeJob(validJobData));
-    expect(mockTimeoutAdd).toHaveBeenCalledWith(
-      'timeout',
-      expect.any(Object),
-      { delay: 0 },
-    );
+    expect(mockTimeoutAdd).toHaveBeenCalledWith('timeout', expect.any(Object), {
+      delay: 0,
+    });
   });
 });
 

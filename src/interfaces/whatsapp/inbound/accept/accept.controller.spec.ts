@@ -197,7 +197,10 @@ describe('AcceptController.receiveWebhook (POST /webhook)', () => {
         res as never,
       ),
     ).rejects.toThrow('boom');
-    expect(mockSpanSetStatus).toHaveBeenCalledWith({ code: 2, message: 'boom' });
+    expect(mockSpanSetStatus).toHaveBeenCalledWith({
+      code: 2,
+      message: 'boom',
+    });
     const recArg = mockSpanRecordException.mock.calls[0][0];
     expect(recArg).toBeInstanceOf(Error);
     expect((recArg as Error).message).toBe('boom');

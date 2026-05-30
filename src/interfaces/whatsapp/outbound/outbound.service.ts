@@ -220,9 +220,7 @@ async function sendFallbackWithRetry(user_id: string): Promise<void> {
   // Spec: if first attempt fails, wait 1s and retry once.
   await new Promise<void>((r) => setTimeout(r, 1000));
   if (await sendFallbackRaw(user_id)) {
-    logger.log(
-      `Fallback delivered (2nd attempt) for user ${toLogId(user_id)}`,
-    );
+    logger.log(`Fallback delivered (2nd attempt) for user ${toLogId(user_id)}`);
     return;
   }
   logger.error(
