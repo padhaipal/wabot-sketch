@@ -13,6 +13,9 @@ import { StatusJobDto } from './status.dto.js';
 const logger = new Logger('StatusProcessor');
 const tracer = trace.getTracer('status-processor');
 
+// BullMQ Processor signature requires async; body is sync but `async` keeps
+// thrown errors as job-rejections rather than uncaught sync throws.
+// eslint-disable-next-line @typescript-eslint/require-await
 export const processStatus: Processor = async (job: Job): Promise<void> => {
   const parentCtx = propagation.extract(
     context.active(),

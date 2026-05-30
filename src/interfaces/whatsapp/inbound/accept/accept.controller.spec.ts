@@ -101,7 +101,7 @@ describe('AcceptController.verifyWebhook (GET /webhook)', () => {
     ],
   )('responds 403 when %s', (_label, mode, token, challenge) => {
     const { res } = makeRes();
-    ctrl.verifyWebhook(mode!, token, challenge, res as never);
+    ctrl.verifyWebhook(mode, token, challenge, res as never);
     expect(res.status).toHaveBeenCalledWith(403);
     expect(res.send).toHaveBeenCalledWith();
   });

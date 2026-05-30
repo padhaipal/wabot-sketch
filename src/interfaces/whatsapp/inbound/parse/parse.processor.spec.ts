@@ -54,7 +54,7 @@ function loadModule(env: { waba?: string; pnId?: string }): ExtractJobsModule {
     } else {
       process.env.PHONE_NUMBER_ID = env.pnId;
     }
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+
     mod = require('./parse.processor') as ExtractJobsModule;
   });
   return mod;
@@ -317,7 +317,7 @@ describe('parseParse — main processor', () => {
       }));
       process.env.WHATSAPP_BUSINESS_ACCOUNT_ID = WABA;
       process.env.PHONE_NUMBER_ID = ALLOWED_PN;
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
+
       mod = require('./parse.processor');
     });
     return mod;

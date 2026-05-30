@@ -50,7 +50,6 @@ jest.mock('@nestjs/common', () => ({
 function importQueues(): typeof import('./queues') {
   let mod!: typeof import('./queues');
   jest.isolateModules(() => {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     mod = require('./queues');
   });
   return mod;

@@ -18,7 +18,7 @@ describe('otel/metrics', () => {
   beforeAll(() => {
     // Importing the module triggers getMeter + createHistogram at the top
     // level, so all assertions can read the captured arguments below.
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+
     messageE2eDuration = require('./metrics').messageE2eDuration;
   });
 

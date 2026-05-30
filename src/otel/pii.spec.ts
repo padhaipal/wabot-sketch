@@ -18,7 +18,7 @@ describe('toLogId', () => {
     let fn!: (phone: string) => string;
     jest.isolateModules(() => {
       // Synchronous require so the module-level key cache is fresh per test.
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
+
       fn = require('./pii').toLogId;
     });
     return fn;
