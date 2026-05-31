@@ -1,5 +1,6 @@
 import { Logger } from '@nestjs/common';
 import { context, propagation } from '@opentelemetry/api';
+import { randomUUID } from 'node:crypto';
 import { connection } from '../../redis/queues.js';
 import { messageE2eDuration } from '../../../otel/metrics.js';
 import { toLogId } from '../../../otel/pii.js';
@@ -9,6 +10,35 @@ import type { SendMessageResultDto } from './outbound.dto.js';
 const logger = new Logger('WhatsAppOutboundService');
 
 const env = process.env.ENV ?? 'development';
+
+// Load-test stub. Phones with the configured prefix short-circuit the WA
+// HTTPS call so artillery scenarios in staging.yml don't burn the WhatsApp
+// service window or rack up Meta API spend. Redis claim/dedupe paths and
+// otel baggage propagation still run end-to-end — only the outbound network
+// call is replaced.
+function getLoadTestPrefix(): string | null {
+  const prefix = process.env.LOAD_TEST_PHONE_PREFIX;
+  return prefix && prefix.length > 0 ? prefix : null;
+}
+
+function isLoadTestUser(userId: string | undefined): boolean {
+  const prefix = getLoadTestPrefix();
+  return (
+    prefix !== null && typeof userId === 'string' && userId.startsWith(prefix)
+  );
+}
+
+async function loadTestDelay(): Promise<void> {
+  const ms = 50 + Math.floor(Math.random() * 100);
+  await new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
+
+function stubOkResponse(): Response {
+  return new Response(
+    JSON.stringify({ messages: [{ id: `stub-${randomUUID()}` }] }),
+    { status: 200, headers: { 'content-type': 'application/json' } },
+  );
+}
 
 function getRequiredEnv(name: string): string {
   const value = process.env[name];
@@ -29,7 +59,15 @@ function authHeaders(): Record<string, string> {
   };
 }
 
-export async function sendReadAndTypingIndicator(wamid: string): Promise<void> {
+export async function sendReadAndTypingIndicator(
+  wamid: string,
+  userId?: string,
+): Promise<void> {
+  if (isLoadTestUser(userId)) {
+    await loadTestDelay();
+    return;
+  }
+
   const body = {
     messaging_product: 'whatsapp',
     status: 'read',
@@ -133,6 +171,11 @@ async function sendSingleItem(opts: {
   user_id: string;
   item: OutboundMediaItemDto;
 }): Promise<Response> {
+  if (isLoadTestUser(opts.user_id)) {
+    await loadTestDelay();
+    return stubOkResponse();
+  }
+
   const deadline = Date.now() + 5_000;
   let delay = 500;
 
@@ -396,6 +439,11 @@ export async function sendNotification(opts: {
   user_id: string;
   media: OutboundMediaItemDto[];
 }): Promise<SendNotificationResult> {
+  if (isLoadTestUser(opts.user_id)) {
+    await loadTestDelay();
+    return { status: 200, delivered: true };
+  }
+
   for (const item of opts.media) {
     const payload = buildWaPayload({ user_id: opts.user_id, item });
     const response = await fetch(graphUrl(), {
