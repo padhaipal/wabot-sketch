@@ -257,7 +257,7 @@ export const processMessage: Processor = async (job: Job): Promise<void> => {
       propagation.inject(ctxWithBaggage, carrier);
 
       const readReceiptPromise = waOutbound
-        .sendReadAndTypingIndicator(wamid)
+        .sendReadAndTypingIndicator(wamid, userId)
         .catch((error: unknown) => {
           const detail = error instanceof Error ? error.message : String(error);
           logger.warn(

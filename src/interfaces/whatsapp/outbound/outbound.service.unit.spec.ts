@@ -530,3 +530,137 @@ describe('uploadMedia', () => {
     ).rejects.toThrow('Upload failed with 503');
   });
 });
+
+// ---------------- load-test phone-prefix stub --------------------------
+
+describe('load-test phone-prefix stub', () => {
+  const PREFIX = '911000';
+  const STUB_USER = `${PREFIX}123456`;
+  const REAL_USER = '919999990001';
+
+  beforeEach(() => {
+    process.env.LOAD_TEST_PHONE_PREFIX = PREFIX;
+  });
+
+  afterEach(() => {
+    delete process.env.LOAD_TEST_PHONE_PREFIX;
+  });
+
+  describe('sendReadAndTypingIndicator', () => {
+    it('short-circuits without calling fetch when userId matches the prefix', async () => {
+      const fetchSpy = jest.fn();
+      global.fetch = fetchSpy as never;
+      await sendReadAndTypingIndicator('wamid.1', STUB_USER);
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it('calls fetch when userId does not match the prefix', async () => {
+      const fetchSpy = jest
+        .fn()
+        .mockResolvedValue(mockResponse({ status: 200 }));
+      global.fetch = fetchSpy as never;
+      await sendReadAndTypingIndicator('wamid.1', REAL_USER);
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('calls fetch when userId is omitted (no stub gate possible)', async () => {
+      const fetchSpy = jest
+        .fn()
+        .mockResolvedValue(mockResponse({ status: 200 }));
+      global.fetch = fetchSpy as never;
+      await sendReadAndTypingIndicator('wamid.1');
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('calls fetch when LOAD_TEST_PHONE_PREFIX is unset, even for matching-looking userId', async () => {
+      delete process.env.LOAD_TEST_PHONE_PREFIX;
+      const fetchSpy = jest
+        .fn()
+        .mockResolvedValue(mockResponse({ status: 200 }));
+      global.fetch = fetchSpy as never;
+      await sendReadAndTypingIndicator('wamid.1', STUB_USER);
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('calls fetch when LOAD_TEST_PHONE_PREFIX is empty', async () => {
+      process.env.LOAD_TEST_PHONE_PREFIX = '';
+      const fetchSpy = jest
+        .fn()
+        .mockResolvedValue(mockResponse({ status: 200 }));
+      global.fetch = fetchSpy as never;
+      await sendReadAndTypingIndicator('wamid.1', STUB_USER);
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('sendMessage (consecutive=true)', () => {
+    const baseOpts = {
+      wamid: 'wamid.1',
+      consecutive: true as const,
+      media: [{ type: 'text' as const, body: 'hi' }],
+    };
+
+    it('short-circuits sendSingleItem without calling fetch when user_id matches', async () => {
+      const fetchSpy = jest.fn();
+      global.fetch = fetchSpy as never;
+      const out = await sendMessage({ ...baseOpts, user_id: STUB_USER });
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(out).toEqual({ status: 200, body: { delivered: true } });
+    });
+
+    it('calls fetch when user_id does not match the prefix', async () => {
+      const fetchSpy = jest
+        .fn()
+        .mockResolvedValue(mockResponse({ status: 200 }));
+      global.fetch = fetchSpy as never;
+      const out = await sendMessage({ ...baseOpts, user_id: REAL_USER });
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      expect(out.body.delivered).toBe(true);
+    });
+  });
+
+  describe('sendMessage (consecutive=false)', () => {
+    it('still runs CLAIM_LUA and only short-circuits the outbound HTTPS call', async () => {
+      mockConnEval.mockResolvedValue(25_000);
+      mockConnDel.mockResolvedValue(1);
+      const fetchSpy = jest.fn();
+      global.fetch = fetchSpy as never;
+      const out = await sendMessage({
+        user_id: STUB_USER,
+        wamid: 'wamid.1',
+        consecutive: false,
+        media: [{ type: 'text', body: 'hi' }],
+      });
+      expect(mockConnEval).toHaveBeenCalledTimes(1);
+      expect(mockConnDel).toHaveBeenCalledTimes(1);
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(out.body.delivered).toBe(true);
+    });
+  });
+
+  describe('sendNotification', () => {
+    it('returns delivered without calling fetch when user_id matches', async () => {
+      const fetchSpy = jest.fn();
+      global.fetch = fetchSpy as never;
+      const out = await sendNotification({
+        user_id: STUB_USER,
+        media: [{ type: 'text', body: 'hi' }],
+      });
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(out).toEqual({ status: 200, delivered: true });
+    });
+
+    it('calls fetch when user_id does not match the prefix', async () => {
+      const fetchSpy = jest
+        .fn()
+        .mockResolvedValue(mockResponse({ status: 200 }));
+      global.fetch = fetchSpy as never;
+      const out = await sendNotification({
+        user_id: REAL_USER,
+        media: [{ type: 'text', body: 'hi' }],
+      });
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      expect(out.delivered).toBe(true);
+    });
+  });
+});

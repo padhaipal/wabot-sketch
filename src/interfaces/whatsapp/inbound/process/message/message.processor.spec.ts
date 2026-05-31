@@ -156,7 +156,10 @@ describe('processMessage — happy path', () => {
     expect(mockSpanSetAttribute).toHaveBeenCalledWith('wamid', 'wamid.1');
     expect(mockSpanSetAttribute).toHaveBeenCalledWith('message.type', 'text');
     expect(mockConnSet).toHaveBeenCalled(); // dedupe
-    expect(mockWaSendReadAndTyping).toHaveBeenCalledWith('wamid.1');
+    expect(mockWaSendReadAndTyping).toHaveBeenCalledWith(
+      'wamid.1',
+      '919999990001',
+    );
     expect(mockTimeoutAdd).toHaveBeenCalled();
     expect(mockConnEval).toHaveBeenCalled(); // consecutive
     expect(mockPpSendMessage).toHaveBeenCalledWith({

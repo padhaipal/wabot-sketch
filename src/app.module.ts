@@ -2,9 +2,10 @@ import { Module } from '@nestjs/common';
 import { AcceptController } from './interfaces/whatsapp/inbound/accept/accept.controller.js';
 import { AcceptService } from './interfaces/whatsapp/inbound/accept/accept.service.js';
 import { PpInboundController } from './interfaces/pp/inbound/inbound.controller.js';
+import { HealthController } from './health/health.controller.js';
 
 @Module({
-  controllers: [AcceptController, PpInboundController],
+  controllers: [AcceptController, PpInboundController, HealthController],
   providers: [AcceptService],
 })
 export class AppModule {}
