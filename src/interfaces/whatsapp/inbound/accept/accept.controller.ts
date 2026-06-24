@@ -15,6 +15,7 @@ import {
   trace,
 } from '@opentelemetry/api';
 import type { OtelCarrier } from '../../../../otel/otel.dto.js';
+import { BAGGAGE_TEST_PHASE } from '../../../../otel/baggage-keys.js';
 import type { Request, Response } from 'express';
 import { AcceptService } from './accept.service';
 
@@ -56,6 +57,7 @@ export class AcceptController {
     @Body() body: unknown,
     @Req() request: RequestWithRawBody,
     @Headers('x-hub-signature-256') signatureHeader: string | undefined,
+    @Headers('x-test-phase') testPhaseHeader: string | undefined,
     @Res() response: Response,
   ): Promise<void> {
     const rawBody = request.rawBody;
@@ -71,7 +73,16 @@ export class AcceptController {
 
     const span = this.tracer.startSpan('enqueue-ingest');
     try {
-      const ctx = trace.setSpan(context.active(), span);
+      let ctx = trace.setSpan(context.active(), span);
+      // Inject the optional x-test-phase header (set by the artillery
+      // scenario) into baggage so downstream metrics/spans/logs across both
+      // services can label by which load-test phase produced the traffic.
+      if (typeof testPhaseHeader === 'string' && testPhaseHeader.length > 0) {
+        const baggage = (
+          propagation.getBaggage(ctx) ?? propagation.createBaggage()
+        ).setEntry(BAGGAGE_TEST_PHASE, { value: testPhaseHeader });
+        ctx = propagation.setBaggage(ctx, baggage);
+      }
       const carrier: OtelCarrier = {};
       propagation.inject(ctx, carrier);
 

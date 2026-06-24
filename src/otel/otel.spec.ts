@@ -15,6 +15,12 @@ const mockPeriodicExportingMetricReader = jest.fn();
 const mockOTLPTraceExporter = jest.fn();
 const mockOTLPMetricExporter = jest.fn();
 const mockOTLPLogExporter = jest.fn();
+const mockBatchSpanProcessor = jest
+  .fn()
+  .mockImplementation((exporter: unknown) => ({ tag: 'batch', exporter }));
+const mockBaggageSpanProcessor = jest
+  .fn()
+  .mockImplementation((keys: unknown) => ({ tag: 'baggage', keys }));
 
 jest.mock('@opentelemetry/api', () => ({
   diag: { setLogger: mockDiagSetLogger },
@@ -46,6 +52,12 @@ jest.mock('@opentelemetry/sdk-node', () => ({
       shutdown: mockSdkShutdown,
     });
   }),
+}));
+jest.mock('@opentelemetry/sdk-trace-base', () => ({
+  BatchSpanProcessor: mockBatchSpanProcessor,
+}));
+jest.mock('./baggage-span-processor', () => ({
+  BaggageSpanProcessor: mockBaggageSpanProcessor,
 }));
 
 function importOtel(): void {
@@ -120,20 +132,33 @@ describe('otel bootstrap — SDK lifecycle', () => {
     mockNodeSDKCtor.mockClear();
   });
 
-  it('constructs NodeSDK with the trace/metric/log exporters + auto instrumentations and starts it', () => {
+  it('constructs NodeSDK with span processors (baggage first, then batch), metric/log exporters + auto instrumentations and starts it', () => {
     importOtel();
     expect(mockNodeSDKCtor).toHaveBeenCalledTimes(1);
     const sdkOpts = mockNodeSDKCtor.mock.calls[0][0] as {
-      traceExporter: unknown;
+      spanProcessors: Array<{ tag: string }>;
       metricReader: unknown;
       logRecordProcessor: unknown;
       instrumentations: unknown;
     };
-    expect(sdkOpts.traceExporter).toBeDefined();
+    // Order matters: BaggageSpanProcessor runs onStart before
+    // BatchSpanProcessor exports the span downstream.
+    expect(sdkOpts.spanProcessors).toHaveLength(2);
+    expect(sdkOpts.spanProcessors[0].tag).toBe('baggage');
+    expect(sdkOpts.spanProcessors[1].tag).toBe('batch');
     expect(sdkOpts.metricReader).toBeDefined();
     expect(sdkOpts.logRecordProcessor).toBeDefined();
     expect(sdkOpts.instrumentations).toEqual(['auto-instrumentations']);
     expect(mockSdkStart).toHaveBeenCalledTimes(1);
+    // BaggageSpanProcessor receives the propagated baggage key list.
+    // Use the latest call: importOtel runs in every test of this describe
+    // block via jest.isolateModules, so the call counter is cumulative.
+    const calls = mockBaggageSpanProcessor.mock.calls;
+    expect(calls.length).toBeGreaterThan(0);
+    const keysArg = calls[calls.length - 1][0] as readonly string[];
+    expect(keysArg).toEqual(
+      expect.arrayContaining(['padhaipal.load_test', 'padhaipal.test_phase']),
+    );
   });
 
   it('logs and continues when sdk.start() throws an Error', () => {

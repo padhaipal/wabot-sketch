@@ -6,6 +6,9 @@ import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-proto';
 import { BatchLogRecordProcessor } from '@opentelemetry/sdk-logs';
 import { PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
 import { NodeSDK } from '@opentelemetry/sdk-node';
+import { BatchSpanProcessor } from '@opentelemetry/sdk-trace-base';
+import { BaggageSpanProcessor } from './baggage-span-processor.js';
+import { PROPAGATED_BAGGAGE_KEYS } from './baggage-keys.js';
 
 const diagLevelMap: Record<string, DiagLogLevel> = {
   WARN: DiagLogLevel.WARN,
@@ -24,8 +27,13 @@ const traceExporter = new OTLPTraceExporter();
 const metricExporter = new OTLPMetricExporter();
 const logExporter = new OTLPLogExporter();
 
+// BaggageSpanProcessor first so padhaipal.* baggage entries land on each
+// span as attributes before BatchSpanProcessor batches/exports the span.
 const sdk = new NodeSDK({
-  traceExporter,
+  spanProcessors: [
+    new BaggageSpanProcessor(PROPAGATED_BAGGAGE_KEYS),
+    new BatchSpanProcessor(traceExporter),
+  ],
   metricReader: new PeriodicExportingMetricReader({
     exporter: metricExporter,
   }),

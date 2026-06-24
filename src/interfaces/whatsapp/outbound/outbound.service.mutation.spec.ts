@@ -28,6 +28,7 @@ jest.mock('@opentelemetry/api', () => ({
 const mockMetricsRecord = jest.fn();
 jest.mock('../../../otel/metrics', () => ({
   messageE2eDuration: { record: mockMetricsRecord },
+  buildE2eAttributes: (outcome: string) => ({ outcome, load_test: 'false' }),
 }));
 
 import { Logger } from '@nestjs/common';

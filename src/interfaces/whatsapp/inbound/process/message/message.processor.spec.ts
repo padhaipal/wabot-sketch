@@ -76,6 +76,13 @@ jest.mock('../../../../pp/outbound/outbound.service', () => ({
 const mockMetricsRecord = jest.fn();
 jest.mock('../../../../../otel/metrics', () => ({
   messageE2eDuration: { record: mockMetricsRecord },
+  buildE2eAttributes: (outcome: string) => ({ outcome, load_test: 'false' }),
+}));
+
+jest.mock('../../../../../otel/baggage-keys', () => ({
+  BAGGAGE_LOAD_TEST: 'padhaipal.load_test',
+  BAGGAGE_TEST_PHASE: 'padhaipal.test_phase',
+  PROPAGATED_BAGGAGE_KEYS: ['padhaipal.load_test', 'padhaipal.test_phase'],
 }));
 
 jest.mock('../../../../../otel/pii', () => ({
@@ -169,6 +176,7 @@ describe('processMessage — happy path', () => {
     });
     expect(mockMetricsRecord).toHaveBeenCalledWith(expect.any(Number), {
       outcome: 'success',
+      load_test: 'false',
     });
     expect(logSpy).toHaveBeenCalledWith(
       'PP accepted message wamid=wamid.1, status=200',
@@ -274,6 +282,7 @@ describe('processMessage — early exits and fallback paths', () => {
     expect(mockWaSendMessage).toHaveBeenCalled();
     expect(mockMetricsRecord).toHaveBeenCalledWith(expect.any(Number), {
       outcome: 'fallback',
+      load_test: 'false',
     });
   });
 
@@ -315,6 +324,7 @@ describe('processMessage — early exits and fallback paths', () => {
     expect(errorSpy).toHaveBeenCalledWith('PP returned 500 for wamid=wamid.1');
     expect(mockMetricsRecord).toHaveBeenCalledWith(expect.any(Number), {
       outcome: 'fallback',
+      load_test: 'false',
     });
   });
 
@@ -331,6 +341,7 @@ describe('processMessage — early exits and fallback paths', () => {
     );
     expect(mockMetricsRecord).toHaveBeenCalledWith(expect.any(Number), {
       outcome: 'success',
+      load_test: 'false',
     });
   });
 });
@@ -353,6 +364,7 @@ describe('sendFallback edge cases (exercised through processMessage PP-failure p
     expect(mockWaSendMessage).not.toHaveBeenCalled();
     expect(mockMetricsRecord).toHaveBeenCalledWith(expect.any(Number), {
       outcome: 'fallback',
+      load_test: 'false',
     });
   });
 
@@ -562,5 +574,77 @@ describe('processMessageTimeout', () => {
       makeJob({ userId: '919999990001', wamid: 'wamid.1' }),
     );
     expect(mockPropExtract).toHaveBeenCalledWith('active-ctx', {});
+  });
+});
+
+describe('processMessage — padhaipal.load_test baggage entry', () => {
+  beforeEach(() => {
+    jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+    jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    mockConnSet.mockResolvedValue('OK');
+    mockConnEval.mockResolvedValue(0);
+    mockTimeoutAdd.mockResolvedValue({ id: 'timeout-1' });
+    mockPpSendMessage.mockResolvedValue(200);
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+    delete process.env.LOAD_TEST_PHONE_PREFIX;
+  });
+
+  it('sets padhaipal.load_test="true" when userId starts with LOAD_TEST_PHONE_PREFIX', async () => {
+    process.env.LOAD_TEST_PHONE_PREFIX = '911000';
+    const setEntry = jest.fn().mockReturnThis();
+    mockPropGetBaggage.mockReturnValue({ setEntry });
+    await processMessage(
+      makeJob({
+        otel: { carrier: { traceparent: 'tp' } },
+        message: { ...validMessage, from: '911000123456' },
+      }),
+    );
+    expect(setEntry).toHaveBeenCalledWith('padhaipal.load_test', {
+      value: 'true',
+    });
+  });
+
+  it('sets padhaipal.load_test="false" when userId does not start with the prefix', async () => {
+    process.env.LOAD_TEST_PHONE_PREFIX = '911000';
+    const setEntry = jest.fn().mockReturnThis();
+    mockPropGetBaggage.mockReturnValue({ setEntry });
+    await processMessage(makeJob(validJobData)); // from: 919999990001
+    expect(setEntry).toHaveBeenCalledWith('padhaipal.load_test', {
+      value: 'false',
+    });
+  });
+
+  it('sets padhaipal.load_test="false" when LOAD_TEST_PHONE_PREFIX is unset', async () => {
+    delete process.env.LOAD_TEST_PHONE_PREFIX;
+    const setEntry = jest.fn().mockReturnThis();
+    mockPropGetBaggage.mockReturnValue({ setEntry });
+    await processMessage(
+      makeJob({
+        otel: { carrier: { traceparent: 'tp' } },
+        message: { ...validMessage, from: '911000123456' },
+      }),
+    );
+    expect(setEntry).toHaveBeenCalledWith('padhaipal.load_test', {
+      value: 'false',
+    });
+  });
+
+  it('sets padhaipal.load_test="false" when LOAD_TEST_PHONE_PREFIX is the empty string', async () => {
+    process.env.LOAD_TEST_PHONE_PREFIX = '';
+    const setEntry = jest.fn().mockReturnThis();
+    mockPropGetBaggage.mockReturnValue({ setEntry });
+    await processMessage(
+      makeJob({
+        otel: { carrier: { traceparent: 'tp' } },
+        message: { ...validMessage, from: '911000123456' },
+      }),
+    );
+    expect(setEntry).toHaveBeenCalledWith('padhaipal.load_test', {
+      value: 'false',
+    });
   });
 });
