@@ -28,6 +28,9 @@ const mockGetTracer = jest.fn().mockReturnValue({ startSpan: mockStartSpan });
 const mockSetSpan = jest.fn().mockReturnValue('ctx-with-span');
 const mockContextActive = jest.fn().mockReturnValue('active-ctx');
 const mockPropagationInject = jest.fn();
+const mockPropagationGetBaggage = jest.fn();
+const mockPropagationCreateBaggage = jest.fn();
+const mockPropagationSetBaggage = jest.fn();
 
 jest.mock('@opentelemetry/api', () => ({
   trace: {
@@ -36,9 +39,17 @@ jest.mock('@opentelemetry/api', () => ({
   },
   propagation: {
     inject: (...args: unknown[]) => mockPropagationInject(...args),
+    getBaggage: (...args: unknown[]) => mockPropagationGetBaggage(...args),
+    createBaggage: (...args: unknown[]) =>
+      mockPropagationCreateBaggage(...args),
+    setBaggage: (...args: unknown[]) => mockPropagationSetBaggage(...args),
   },
   context: { active: () => mockContextActive() },
   SpanStatusCode: { ERROR: 2, OK: 1, UNSET: 0 },
+}));
+
+jest.mock('../../../../otel/baggage-keys', () => ({
+  BAGGAGE_TEST_PHASE: 'padhaipal.test_phase',
 }));
 
 import { AcceptController } from './accept.controller';
@@ -137,6 +148,7 @@ describe('AcceptController.receiveWebhook (POST /webhook)', () => {
       { x: 1 },
       { rawBody: undefined } as never,
       'sig',
+      undefined,
       res as never,
     );
     expect(res.status).toHaveBeenCalledWith(401);
@@ -151,6 +163,7 @@ describe('AcceptController.receiveWebhook (POST /webhook)', () => {
       { x: 1 },
       { rawBody: Buffer.from('payload') } as never,
       'sig',
+      undefined,
       res as never,
     );
     expect(acceptSvc.isValidSignature).toHaveBeenCalledWith(
@@ -169,6 +182,7 @@ describe('AcceptController.receiveWebhook (POST /webhook)', () => {
       { entries: [] },
       { rawBody: Buffer.from('p') } as never,
       'sig',
+      undefined,
       res as never,
     );
     expect(mockStartSpan).toHaveBeenCalledWith('enqueue-ingest');
@@ -194,6 +208,7 @@ describe('AcceptController.receiveWebhook (POST /webhook)', () => {
         {},
         { rawBody: Buffer.from('p') } as never,
         'sig',
+        undefined,
         res as never,
       ),
     ).rejects.toThrow('boom');
@@ -216,6 +231,7 @@ describe('AcceptController.receiveWebhook (POST /webhook)', () => {
         {},
         { rawBody: Buffer.from('p') } as never,
         'sig',
+        undefined,
         res as never,
       ),
     ).rejects.toBe('plain-string');
@@ -226,5 +242,97 @@ describe('AcceptController.receiveWebhook (POST /webhook)', () => {
     const recArg = mockSpanRecordException.mock.calls[0][0];
     expect(recArg).toBeInstanceOf(Error);
     expect((recArg as Error).message).toBe('plain-string');
+  });
+
+  describe('x-test-phase baggage propagation', () => {
+    function setupBaggageMocks(): { setEntry: jest.Mock } {
+      const setEntry = jest.fn().mockReturnThis();
+      mockPropagationGetBaggage.mockReset().mockReturnValue({ setEntry });
+      mockPropagationCreateBaggage.mockReset().mockReturnValue({ setEntry });
+      mockPropagationSetBaggage.mockReset().mockReturnValue('ctx-with-baggage');
+      return { setEntry };
+    }
+
+    it('sets padhaipal.test_phase baggage entry when x-test-phase header is present', async () => {
+      const { setEntry } = setupBaggageMocks();
+      const { res } = makeRes();
+      acceptSvc.isValidSignature.mockReturnValue(true);
+      acceptSvc.receiveWebhook.mockResolvedValue(200);
+      await ctrl.receiveWebhook(
+        { entries: [] },
+        { rawBody: Buffer.from('p') } as never,
+        'sig',
+        'phase_1',
+        res as never,
+      );
+      expect(setEntry).toHaveBeenCalledWith('padhaipal.test_phase', {
+        value: 'phase_1',
+      });
+      // setBaggage is called with the baggage-enriched context, then
+      // injection runs on that context so downstream services see it.
+      expect(mockPropagationSetBaggage).toHaveBeenCalledTimes(1);
+      expect(mockPropagationInject).toHaveBeenCalledWith(
+        'ctx-with-baggage',
+        expect.any(Object),
+      );
+    });
+
+    it('does NOT touch baggage when x-test-phase header is omitted', async () => {
+      const { setEntry } = setupBaggageMocks();
+      const { res } = makeRes();
+      acceptSvc.isValidSignature.mockReturnValue(true);
+      acceptSvc.receiveWebhook.mockResolvedValue(200);
+      await ctrl.receiveWebhook(
+        { entries: [] },
+        { rawBody: Buffer.from('p') } as never,
+        'sig',
+        undefined,
+        res as never,
+      );
+      expect(setEntry).not.toHaveBeenCalled();
+      expect(mockPropagationSetBaggage).not.toHaveBeenCalled();
+      // Injection still runs on the original span-only context.
+      expect(mockPropagationInject).toHaveBeenCalledWith(
+        'ctx-with-span',
+        expect.any(Object),
+      );
+    });
+
+    it('does NOT touch baggage when x-test-phase header is the empty string', async () => {
+      const { setEntry } = setupBaggageMocks();
+      const { res } = makeRes();
+      acceptSvc.isValidSignature.mockReturnValue(true);
+      acceptSvc.receiveWebhook.mockResolvedValue(200);
+      await ctrl.receiveWebhook(
+        { entries: [] },
+        { rawBody: Buffer.from('p') } as never,
+        'sig',
+        '',
+        res as never,
+      );
+      expect(setEntry).not.toHaveBeenCalled();
+      expect(mockPropagationSetBaggage).not.toHaveBeenCalled();
+    });
+
+    it('uses createBaggage when no parent baggage exists', async () => {
+      const setEntry = jest.fn().mockReturnThis();
+      mockPropagationGetBaggage.mockReset().mockReturnValue(undefined);
+      mockPropagationCreateBaggage.mockReset().mockReturnValue({ setEntry });
+      mockPropagationSetBaggage.mockReset().mockReturnValue('ctx-with-baggage');
+      const { res } = makeRes();
+      acceptSvc.isValidSignature.mockReturnValue(true);
+      acceptSvc.receiveWebhook.mockResolvedValue(200);
+      await ctrl.receiveWebhook(
+        { entries: [] },
+        { rawBody: Buffer.from('p') } as never,
+        'sig',
+        'phase_2',
+        res as never,
+      );
+      expect(mockPropagationCreateBaggage).toHaveBeenCalledTimes(1);
+      expect(setEntry).toHaveBeenCalledWith('padhaipal.test_phase', {
+        value: 'phase_2',
+      });
+    });
   });
 });

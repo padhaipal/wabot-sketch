@@ -2,7 +2,10 @@ import { Logger } from '@nestjs/common';
 import { context, propagation } from '@opentelemetry/api';
 import { randomUUID } from 'node:crypto';
 import { connection } from '../../redis/queues.js';
-import { messageE2eDuration } from '../../../otel/metrics.js';
+import {
+  buildE2eAttributes,
+  messageE2eDuration,
+} from '../../../otel/metrics.js';
 import { toLogId } from '../../../otel/pii.js';
 import type { OutboundMediaItemDto } from '../../pp/inbound/inbound.dto.js';
 import type { SendMessageResultDto } from './outbound.dto.js';
@@ -341,7 +344,10 @@ export async function sendMessage(opts: {
     outcome: 'delivered' | 'inflight-expired' | 'whatsapp-error',
   ): void => {
     if (originalTsMs === undefined || Number.isNaN(originalTsMs)) return;
-    messageE2eDuration.record(Date.now() - originalTsMs, { outcome });
+    messageE2eDuration.record(
+      Date.now() - originalTsMs,
+      buildE2eAttributes(outcome),
+    );
   };
 
   let inflightKey: string | null = null;

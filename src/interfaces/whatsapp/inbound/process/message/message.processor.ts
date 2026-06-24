@@ -16,7 +16,11 @@ import {
 import { validateJobData } from '../../../../../validation/validate-job.js';
 import * as waOutbound from '../../../outbound/outbound.service.js';
 import * as ppOutbound from '../../../../pp/outbound/outbound.service.js';
-import { messageE2eDuration } from '../../../../../otel/metrics.js';
+import {
+  buildE2eAttributes,
+  messageE2eDuration,
+} from '../../../../../otel/metrics.js';
+import { BAGGAGE_LOAD_TEST } from '../../../../../otel/baggage-keys.js';
 import { toLogId } from '../../../../../otel/pii.js';
 import { MessageJobDto } from './message.dto.js';
 
@@ -222,9 +226,15 @@ export const processMessage: Processor = async (job: Job): Promise<void> => {
     // WhatsApp send from this process — can read it via context.active() and
     // record a true user-perceived delivery latency without threading the
     // timestamp through DTOs. See otel/metrics.prompt.md.
+    const loadTestPrefix = process.env.LOAD_TEST_PHONE_PREFIX;
+    const isLoadTest =
+      typeof loadTestPrefix === 'string' &&
+      loadTestPrefix.length > 0 &&
+      userId.startsWith(loadTestPrefix);
     const baggage = (propagation.getBaggage(ctx) ?? propagation.createBaggage())
       .setEntry('wabot.msg.ts_ms', { value: String(messageTimestampMs) })
-      .setEntry('wabot.msg.wamid', { value: wamid });
+      .setEntry('wabot.msg.wamid', { value: wamid })
+      .setEntry(BAGGAGE_LOAD_TEST, { value: isLoadTest ? 'true' : 'false' });
     const ctxWithBaggage = propagation.setBaggage(ctx, baggage);
 
     // Activate ctxWithBaggage as the active context so every auto-instrumented
@@ -240,9 +250,10 @@ export const processMessage: Processor = async (job: Job): Promise<void> => {
         isNew = await dedupeMessage(wamid);
       } catch {
         await sendFallback({ userId, wamid, ctx: ctxWithBaggage });
-        messageE2eDuration.record(Date.now() - messageTimestampMs, {
-          outcome: 'fallback',
-        });
+        messageE2eDuration.record(
+          Date.now() - messageTimestampMs,
+          buildE2eAttributes('fallback'),
+        );
         throw new Error('Redis dedupe unavailable');
       }
 
@@ -286,9 +297,10 @@ export const processMessage: Processor = async (job: Job): Promise<void> => {
         isConsecutive = await checkConsecutive({ userId, wamid });
       } catch {
         await sendFallback({ userId, wamid, ctx: ctxWithBaggage });
-        messageE2eDuration.record(Date.now() - messageTimestampMs, {
-          outcome: 'fallback',
-        });
+        messageE2eDuration.record(
+          Date.now() - messageTimestampMs,
+          buildE2eAttributes('fallback'),
+        );
         throw new Error('Redis consecutive-check unavailable');
       }
 
@@ -302,17 +314,19 @@ export const processMessage: Processor = async (job: Job): Promise<void> => {
         logger.log(
           `PP accepted message wamid=${wamid}, status=${String(ppStatus)}`,
         );
-        messageE2eDuration.record(Date.now() - messageTimestampMs, {
-          outcome: 'success',
-        });
+        messageE2eDuration.record(
+          Date.now() - messageTimestampMs,
+          buildE2eAttributes('success'),
+        );
         return;
       }
 
       logger.error(`PP returned ${String(ppStatus)} for wamid=${wamid}`);
       await sendFallback({ userId, wamid, ctx: ctxWithBaggage });
-      messageE2eDuration.record(Date.now() - messageTimestampMs, {
-        outcome: 'fallback',
-      });
+      messageE2eDuration.record(
+        Date.now() - messageTimestampMs,
+        buildE2eAttributes('fallback'),
+      );
       throw new Error(`PP returned ${String(ppStatus)}`);
     });
   } catch (error: unknown) {

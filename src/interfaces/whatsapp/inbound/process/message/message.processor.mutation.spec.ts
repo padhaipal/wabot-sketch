@@ -73,6 +73,13 @@ jest.mock('../../../../pp/outbound/outbound.service', () => ({
 const mockMetricsRecord = jest.fn();
 jest.mock('../../../../../otel/metrics', () => ({
   messageE2eDuration: { record: mockMetricsRecord },
+  buildE2eAttributes: (outcome: string) => ({ outcome, load_test: 'false' }),
+}));
+
+jest.mock('../../../../../otel/baggage-keys', () => ({
+  BAGGAGE_LOAD_TEST: 'padhaipal.load_test',
+  BAGGAGE_TEST_PHASE: 'padhaipal.test_phase',
+  PROPAGATED_BAGGAGE_KEYS: ['padhaipal.load_test', 'padhaipal.test_phase'],
 }));
 
 jest.mock('../../../../../otel/pii', () => ({
@@ -222,6 +229,7 @@ describe('ppStatus 2xx boundary', () => {
       await processMessage(makeJob(validJobData));
       expect(mockMetricsRecord).toHaveBeenCalledWith(expect.any(Number), {
         outcome: 'success',
+        load_test: 'false',
       });
       expect(logSpy).toHaveBeenCalledWith(
         `PP accepted message wamid=wamid.1, status=${String(status)}`,
@@ -238,6 +246,7 @@ describe('ppStatus 2xx boundary', () => {
       );
       expect(mockMetricsRecord).toHaveBeenCalledWith(expect.any(Number), {
         outcome: 'fallback',
+        load_test: 'false',
       });
     },
   );
