@@ -1,8 +1,14 @@
 import { diag, DiagConsoleLogger, DiagLogLevel } from '@opentelemetry/api';
 import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node';
+import {
+  CompositePropagator,
+  W3CBaggagePropagator,
+  W3CTraceContextPropagator,
+} from '@opentelemetry/core';
 import { OTLPLogExporter } from '@opentelemetry/exporter-logs-otlp-proto';
 import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-proto';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-proto';
+import { UndiciInstrumentation } from '@opentelemetry/instrumentation-undici';
 import { BatchLogRecordProcessor } from '@opentelemetry/sdk-logs';
 import { PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
 import { NodeSDK } from '@opentelemetry/sdk-node';
@@ -27,9 +33,20 @@ const traceExporter = new OTLPTraceExporter();
 const metricExporter = new OTLPMetricExporter();
 const logExporter = new OTLPLogExporter();
 
+// CompositePropagator combines W3C TraceContext (default) with
+// W3CBaggagePropagator so that padhaipal.load_test / padhaipal.test_phase
+// (and any other baggage entries) serialize into the `baggage` HTTP
+// header on outgoing requests and round-trip back through ingest queues.
+// Without the baggage propagator, NodeSDK only carries the trace context
+// across process boundaries and pp-sketch sees `load_test` as absent.
+const textMapPropagator = new CompositePropagator({
+  propagators: [new W3CTraceContextPropagator(), new W3CBaggagePropagator()],
+});
+
 // BaggageSpanProcessor first so padhaipal.* baggage entries land on each
 // span as attributes before BatchSpanProcessor batches/exports the span.
 const sdk = new NodeSDK({
+  textMapPropagator,
   spanProcessors: [
     new BaggageSpanProcessor(PROPAGATED_BAGGAGE_KEYS),
     new BatchSpanProcessor(traceExporter),
@@ -38,7 +55,15 @@ const sdk = new NodeSDK({
     exporter: metricExporter,
   }),
   logRecordProcessor: new BatchLogRecordProcessor(logExporter),
-  instrumentations: [getNodeAutoInstrumentations()],
+  // UndiciInstrumentation covers Node 18+'s global `fetch` (used by both
+  // services for cross-process HTTP calls). The default auto-instrumentation
+  // bundle only hooks the legacy `http`/`https` modules, missing all fetch
+  // traffic — wabot → pp-sketch is undici-driven and was invisible without
+  // this addition.
+  instrumentations: [
+    getNodeAutoInstrumentations(),
+    new UndiciInstrumentation(),
+  ],
 });
 
 try {

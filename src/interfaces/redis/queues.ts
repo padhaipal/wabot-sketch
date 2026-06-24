@@ -2,6 +2,7 @@ import { Logger } from '@nestjs/common';
 import { Queue, Worker } from 'bullmq';
 import type { JobsOptions, Processor, WorkerOptions } from 'bullmq';
 import Redis from 'ioredis';
+import { instrumentQueue, instrumentWorker } from '../../otel/queue-metrics.js';
 
 export const QUEUE_NAMES = {
   INGEST: 'ingest',
@@ -41,6 +42,7 @@ export function createQueue(
     },
   });
   queues.push(queue);
+  instrumentQueue(queue, name);
   return queue;
 }
 
@@ -63,6 +65,7 @@ export function createWorker(
     logger.error(`Job ${String(job?.id)} failed on [${name}]: ${err.message}`);
   });
 
+  instrumentWorker(worker, name);
   workers.push(worker);
   return worker;
 }
