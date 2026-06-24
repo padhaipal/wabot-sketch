@@ -21,6 +21,18 @@ const mockBatchSpanProcessor = jest
 const mockBaggageSpanProcessor = jest
   .fn()
   .mockImplementation((keys: unknown) => ({ tag: 'baggage', keys }));
+const mockCompositePropagator = jest
+  .fn()
+  .mockImplementation((cfg: unknown) => ({ tag: 'composite', cfg }));
+const mockW3CTraceContextPropagator = jest
+  .fn()
+  .mockImplementation(() => ({ tag: 'trace-prop' }));
+const mockW3CBaggagePropagator = jest
+  .fn()
+  .mockImplementation(() => ({ tag: 'baggage-prop' }));
+const mockUndiciInstrumentation = jest
+  .fn()
+  .mockImplementation(() => ({ tag: 'undici-instrumentation' }));
 
 jest.mock('@opentelemetry/api', () => ({
   diag: { setLogger: mockDiagSetLogger },
@@ -55,6 +67,14 @@ jest.mock('@opentelemetry/sdk-node', () => ({
 }));
 jest.mock('@opentelemetry/sdk-trace-base', () => ({
   BatchSpanProcessor: mockBatchSpanProcessor,
+}));
+jest.mock('@opentelemetry/core', () => ({
+  CompositePropagator: mockCompositePropagator,
+  W3CTraceContextPropagator: mockW3CTraceContextPropagator,
+  W3CBaggagePropagator: mockW3CBaggagePropagator,
+}));
+jest.mock('@opentelemetry/instrumentation-undici', () => ({
+  UndiciInstrumentation: mockUndiciInstrumentation,
 }));
 jest.mock('./baggage-span-processor', () => ({
   BaggageSpanProcessor: mockBaggageSpanProcessor,
@@ -148,8 +168,23 @@ describe('otel bootstrap — SDK lifecycle', () => {
     expect(sdkOpts.spanProcessors[1].tag).toBe('batch');
     expect(sdkOpts.metricReader).toBeDefined();
     expect(sdkOpts.logRecordProcessor).toBeDefined();
-    expect(sdkOpts.instrumentations).toEqual(['auto-instrumentations']);
+    expect(sdkOpts.instrumentations).toEqual([
+      'auto-instrumentations',
+      { tag: 'undici-instrumentation' },
+    ]);
     expect(mockSdkStart).toHaveBeenCalledTimes(1);
+    // textMapPropagator is the composite of trace + baggage.
+    const textMapPropagator = (
+      sdkOpts as unknown as { textMapPropagator: { tag: string; cfg: unknown } }
+    ).textMapPropagator;
+    expect(textMapPropagator.tag).toBe('composite');
+    const propCfg = textMapPropagator.cfg as {
+      propagators: Array<{ tag: string }>;
+    };
+    expect(propCfg.propagators.map((p) => p.tag)).toEqual([
+      'trace-prop',
+      'baggage-prop',
+    ]);
     // BaggageSpanProcessor receives the propagated baggage key list.
     // Use the latest call: importOtel runs in every test of this describe
     // block via jest.isolateModules, so the call counter is cumulative.
