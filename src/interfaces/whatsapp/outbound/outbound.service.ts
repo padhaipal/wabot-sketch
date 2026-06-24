@@ -1,7 +1,9 @@
 import { Logger } from '@nestjs/common';
 import { context, propagation } from '@opentelemetry/api';
 import { randomUUID } from 'node:crypto';
+import { Readable } from 'node:stream';
 import { connection } from '../../redis/queues.js';
+import { BAGGAGE_LOAD_TEST } from '../../../otel/baggage-keys.js';
 import {
   buildE2eAttributes,
   messageE2eDuration,
@@ -31,9 +33,37 @@ function isLoadTestUser(userId: string | undefined): boolean {
   );
 }
 
+// Outbound paths that do not receive a user id (downloadMedia, uploadMedia)
+// fall back to the W3C Baggage `padhaipal.load_test` entry, which the inbound
+// processor sets based on the same LOAD_TEST_PHONE_PREFIX check. Caller MUST
+// have wrapped this call in `context.with(ctxWithBaggage, …)` for the read
+// to succeed; when no baggage is active the function returns false and the
+// real outbound call proceeds — matching the documented "let it pass when
+// the user phone number isn't reachable" semantic.
+function isLoadTestContextActive(): boolean {
+  const baggage = propagation.getBaggage(context.active());
+  return baggage?.getEntry(BAGGAGE_LOAD_TEST)?.value === 'true';
+}
+
 async function loadTestDelay(): Promise<void> {
   const ms = 50 + Math.floor(Math.random() * 100);
   await new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
+
+function stubMediaStream(): {
+  stream: NodeJS.ReadableStream;
+  content_type: string;
+} {
+  // Single-byte buffer so downstream `pipe`/`stream`/length-aware code paths
+  // see a non-empty but cheap stream during load tests.
+  return {
+    stream: Readable.from(Buffer.from([0x00])),
+    content_type: 'application/octet-stream',
+  };
+}
+
+function stubWaMediaUrl(): string {
+  return `https://stub.load-test.invalid/media/${randomUUID()}`;
 }
 
 function stubOkResponse(): Response {
@@ -224,6 +254,10 @@ function inferFallbackMediaType(url: string): 'audio' | 'video' {
 // Direct WhatsApp send for the fallback message — bypasses claim/inflight
 // machinery so it works even when the inflight key cannot be recreated.
 async function sendFallbackRaw(user_id: string): Promise<boolean> {
+  if (isLoadTestUser(user_id)) {
+    await loadTestDelay();
+    return true;
+  }
   const fallbackUrl = process.env.FALL_BACK_MESSAGE_PUBLIC_URL;
   if (!fallbackUrl) {
     logger.error(
@@ -499,6 +533,11 @@ export async function sendNotification(opts: {
 export async function downloadMedia(
   mediaUrl: string,
 ): Promise<{ stream: NodeJS.ReadableStream; content_type: string }> {
+  if (isLoadTestContextActive()) {
+    await loadTestDelay();
+    return stubMediaStream();
+  }
+
   const response = await fetch(mediaUrl, {
     headers: {
       Authorization: `Bearer ${getRequiredEnv('WHATSAPP_ACCESS_TOKEN')}`,
@@ -533,6 +572,11 @@ export async function uploadMedia(opts: {
   content_type: string;
   media_type: string;
 }): Promise<{ wa_media_url: string }> {
+  if (isLoadTestContextActive()) {
+    await loadTestDelay();
+    return { wa_media_url: stubWaMediaUrl() };
+  }
+
   const mimeExtensionMap: Record<string, string> = {
     'image/jpeg': 'jpg',
     'image/png': 'png',
