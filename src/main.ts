@@ -43,11 +43,18 @@ async function bootstrap(): Promise<void> {
     limit: '16mb',
   });
 
-  createWorker(QUEUE_NAMES.INGEST, parseParse);
-  createWorker(QUEUE_NAMES.PROCESS_MESSAGE, processMessage);
-  createWorker(QUEUE_NAMES.PROCESS_MESSAGE_TIMEOUT, processMessageTimeout);
-  createWorker(QUEUE_NAMES.PROCESS_STATUS, processStatus);
-  createWorker(QUEUE_NAMES.PROCESS_ERRORS, processError);
+  // Per-replica concurrency. Gateway work is light + I/O-bound (validate,
+  // redis, HTTP forward to pp-sketch), so high concurrency overlaps the waits.
+  const workerOpts = { concurrency: 100 };
+  createWorker(QUEUE_NAMES.INGEST, parseParse, workerOpts);
+  createWorker(QUEUE_NAMES.PROCESS_MESSAGE, processMessage, workerOpts);
+  createWorker(
+    QUEUE_NAMES.PROCESS_MESSAGE_TIMEOUT,
+    processMessageTimeout,
+    workerOpts,
+  );
+  createWorker(QUEUE_NAMES.PROCESS_STATUS, processStatus, workerOpts);
+  createWorker(QUEUE_NAMES.PROCESS_ERRORS, processError, workerOpts);
 
   const shutdown = async (signal: string): Promise<void> => {
     console.log(`Received ${signal}, shutting down gracefully…`);
