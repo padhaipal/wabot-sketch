@@ -729,10 +729,11 @@ describe('load-test phone-prefix stub', () => {
     });
   });
 
-  // downloadMedia and uploadMedia do not receive a user_id — they read the
-  // `padhaipal.load_test` baggage entry from the active context to decide
-  // whether to stub. The pp/inbound controller wraps both calls in
-  // `context.with(ctxWithBaggage, …)` so the baggage is available.
+  // downloadMedia and uploadMedia accept an optional explicit user id
+  // (prefix gate, same predicate as the send paths); the
+  // `padhaipal.load_test` baggage entry remains a transitional fallback for
+  // callers that don't pass it yet. The pp/inbound controller wraps both
+  // calls in `context.with(ctxWithBaggage, …)` so the baggage is available.
   describe('downloadMedia', () => {
     const baggageLoadTestTrue = {
       getEntry: (k: string) =>
@@ -831,6 +832,64 @@ describe('load-test phone-prefix stub', () => {
         data: Buffer.from([1, 2, 3]),
         content_type: 'audio/mpeg',
         media_type: 'audio',
+      });
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // Explicit-user-id prefix gate on the media endpoints — pp-sketch passes
+  // the owning user's external id for user-scoped media (report-card
+  // preloads carry no baggage). No baggage is active in any of these cases.
+  describe('downloadMedia (explicit user id)', () => {
+    it('short-circuits to the stub when userExternalId matches the prefix', async () => {
+      const fetchSpy = jest.fn();
+      global.fetch = fetchSpy as never;
+      const out = await downloadMedia('https://wa/m/1', STUB_USER);
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(out.content_type).toBe('application/octet-stream');
+      expect(out.stream).toBeDefined();
+    });
+
+    it('calls fetch when userExternalId does not match the prefix', async () => {
+      const fetchSpy = jest.fn().mockResolvedValue(
+        mockResponse({
+          status: 200,
+          contentType: 'audio/ogg',
+          body: Buffer.alloc(0) as unknown as NodeJS.ReadableStream,
+        }),
+      );
+      global.fetch = fetchSpy as never;
+      await downloadMedia('https://wa/m/1', REAL_USER);
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('uploadMedia (explicit user id)', () => {
+    it('returns a stub URL without fetch when user_external_id matches the prefix', async () => {
+      const fetchSpy = jest.fn();
+      global.fetch = fetchSpy as never;
+      const out = await uploadMedia({
+        data: Buffer.from([1, 2, 3]),
+        content_type: 'image/png',
+        media_type: 'image',
+        user_external_id: STUB_USER,
+      });
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(out.wa_media_url).toMatch(
+        /^https:\/\/stub\.load-test\.invalid\/media\//,
+      );
+    });
+
+    it('calls fetch when user_external_id does not match the prefix', async () => {
+      const fetchSpy = jest
+        .fn()
+        .mockResolvedValue(mockResponse({ status: 200, json: { id: 'm1' } }));
+      global.fetch = fetchSpy as never;
+      await uploadMedia({
+        data: Buffer.from([1, 2, 3]),
+        content_type: 'image/png',
+        media_type: 'image',
+        user_external_id: REAL_USER,
       });
       expect(fetchSpy).toHaveBeenCalledTimes(1);
     });

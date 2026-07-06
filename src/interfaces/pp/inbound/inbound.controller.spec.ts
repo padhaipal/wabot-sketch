@@ -208,6 +208,21 @@ describe('PpInboundController.downloadMedia', () => {
     expect(res.status).toHaveBeenCalledWith(400);
   });
 
+  it('forwards media_url + user_external_id to waOutbound.downloadMedia', async () => {
+    const { res } = makeRes();
+    // Reject so the (e2e-covered) pipe path is skipped; call args are the
+    // subject here.
+    mockWaDownloadMedia.mockRejectedValue(new Error('stop here'));
+    await ctrl.downloadMedia(
+      { ...validBody, user_external_id: '911000123456' },
+      res as never,
+    );
+    expect(mockWaDownloadMedia).toHaveBeenCalledWith(
+      'https://wa/m/1',
+      '911000123456',
+    );
+  });
+
   // Pipe happy-path is exercised end-to-end by the upstream e2e workflow;
   // mocking the full Writable interface here adds more surface than value
   // given the surrounding error branches are already covered.
@@ -320,6 +335,23 @@ describe('PpInboundController.uploadMedia', () => {
     });
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.json).toHaveBeenCalledWith({ wa_media_url: 'wa://m/1' });
+  });
+
+  it('forwards the ?user= query param as user_external_id', async () => {
+    const { res } = makeRes();
+    mockWaUploadMedia.mockResolvedValue({ wa_media_url: 'wa://m/9' });
+    await ctrl.uploadMedia(
+      req(Buffer.from('payload')) as never,
+      'image/png',
+      'image',
+      undefined,
+      res as never,
+      '911000123456',
+    );
+    expect(mockWaUploadMedia).toHaveBeenCalledWith(
+      expect.objectContaining({ user_external_id: '911000123456' }),
+    );
+    expect(res.status).toHaveBeenCalledWith(200);
   });
 
   it('otel query param: valid JSON record passes through to propagation.extract', async () => {
