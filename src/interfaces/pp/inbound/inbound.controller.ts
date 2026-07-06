@@ -151,7 +151,7 @@ export class PpInboundController {
 
     try {
       const { stream, content_type } = await context.with(ctx, () =>
-        waOutbound.downloadMedia(dto.media_url),
+        waOutbound.downloadMedia(dto.media_url, dto.user_external_id),
       );
 
       response.setHeader('Content-Type', content_type);
@@ -197,6 +197,11 @@ export class PpInboundController {
     @Headers('x-media-type') mediaType: string | undefined,
     @Query('otel') otelParam: string | undefined,
     @Res() response: Response,
+    // Owner of the media when user-scoped; body is raw bytes so this rides
+    // the query string like `otel`. Deliberately LAST: existing specs call
+    // this method positionally, and Nest binds params by decorator, not
+    // position, so appending keeps those call sites valid.
+    @Query('user') userExternalId: string | undefined,
   ): Promise<void> {
     const rawBody = request.rawBody;
     if (!Buffer.isBuffer(rawBody)) {
@@ -251,6 +256,7 @@ export class PpInboundController {
           data: rawBody,
           content_type: contentType,
           media_type: mediaType,
+          user_external_id: userExternalId,
         }),
       );
 

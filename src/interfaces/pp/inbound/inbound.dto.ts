@@ -72,6 +72,12 @@ export class DownloadMediaDto {
 
   @IsString()
   media_url!: string;
+
+  // Owner of the media when user-scoped (load-test users short-circuit the
+  // real WhatsApp fetch); absent for user-less callers.
+  @IsOptional()
+  @IsString()
+  user_external_id?: string;
 }
 
 export class UploadMediaResponseDto {
