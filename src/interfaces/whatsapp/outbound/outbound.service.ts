@@ -532,8 +532,15 @@ export async function sendNotification(opts: {
 
 export async function downloadMedia(
   mediaUrl: string,
+  userExternalId?: string,
 ): Promise<{ stream: NodeJS.ReadableStream; content_type: string }> {
-  if (isLoadTestContextActive()) {
+  // Prefix gate — same predicate as sendMessage/sendNotification. The baggage
+  // check remains as a transitional fallback until pp-sketch passes
+  // user_external_id on every call; slated for removal after that deploy.
+  if (isLoadTestUser(userExternalId) || isLoadTestContextActive()) {
+    logger.debug(
+      `downloadMedia stubbed (load-test) user=${userExternalId ? toLogId(userExternalId) : '(baggage)'}`,
+    );
     await loadTestDelay();
     return stubMediaStream();
   }
@@ -571,8 +578,16 @@ export async function uploadMedia(opts: {
   data: Buffer;
   content_type: string;
   media_type: string;
+  // Set when the media belongs to a user (e.g. report-card preloads); absent
+  // for library media (static uploads, gen pipelines) which must hit the real
+  // API. Load-test users short-circuit.
+  user_external_id?: string;
 }): Promise<{ wa_media_url: string }> {
-  if (isLoadTestContextActive()) {
+  // Prefix gate + transitional baggage fallback (see downloadMedia note).
+  if (isLoadTestUser(opts.user_external_id) || isLoadTestContextActive()) {
+    logger.debug(
+      `uploadMedia stubbed (load-test) user=${opts.user_external_id ? toLogId(opts.user_external_id) : '(baggage)'}`,
+    );
     await loadTestDelay();
     return { wa_media_url: stubWaMediaUrl() };
   }
