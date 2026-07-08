@@ -44,3 +44,25 @@ export function buildE2eAttributes(
   }
   return attrs;
 }
+
+// Counts outbound text media items dropped for exceeding the WhatsApp
+// 4096-character text body limit (see TEXT_BODY_MAX_CHARS in
+// whatsapp/outbound/outbound.service.ts). Text bodies are runtime-generated
+// upstream (e.g. pp-sketch sentence prompts), so a non-zero rate here means
+// an upstream producer is emitting oversize prompts and students are missing
+// messages. `path` is the send entry point ('sendMessage' | 'sendNotification').
+export const oversizeTextBlocked = meter.createCounter(
+  'wabot.outbound.oversize_text_blocked',
+  {
+    description:
+      'Outbound text items dropped for exceeding the WhatsApp 4096-char body limit.',
+  },
+);
+
+export function buildOversizeTextAttributes(
+  path: 'sendMessage' | 'sendNotification',
+): Record<string, string> {
+  const baggage = propagation.getBaggage(context.active());
+  const loadTest = baggage?.getEntry(BAGGAGE_LOAD_TEST)?.value ?? 'false';
+  return { path, load_test: loadTest };
+}

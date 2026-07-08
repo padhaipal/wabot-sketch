@@ -6,7 +6,9 @@ import { connection } from '../../redis/queues.js';
 import { BAGGAGE_LOAD_TEST } from '../../../otel/baggage-keys.js';
 import {
   buildE2eAttributes,
+  buildOversizeTextAttributes,
   messageE2eDuration,
+  oversizeTextBlocked,
 } from '../../../otel/metrics.js';
 import { toLogId } from '../../../otel/pii.js';
 import type { OutboundMediaItemDto } from '../../pp/inbound/inbound.dto.js';
@@ -177,6 +179,31 @@ else
   return 0
 end
 `;
+
+// WhatsApp Cloud API rejects text bodies over 4096 characters. Text bodies
+// are the one runtime-generated media type (e.g. pp-sketch sentence prompts),
+// so an oversize body is blocked here — dropping just the offending item and
+// still delivering the rest of the bundle — rather than letting the whole
+// send fail at Meta's end. Each block emits an ERROR log and increments the
+// wabot.outbound.oversize_text_blocked counter.
+export const TEXT_BODY_MAX_CHARS = 4096;
+
+function dropOversizeTextItems(
+  media: OutboundMediaItemDto[],
+  user_id: string,
+  path: 'sendMessage' | 'sendNotification',
+): OutboundMediaItemDto[] {
+  return media.filter((item, index) => {
+    if (item.type !== 'text') return true;
+    const length = item.body?.length ?? 0;
+    if (length <= TEXT_BODY_MAX_CHARS) return true;
+    logger.error(
+      `Blocked oversize text item for user ${toLogId(user_id)}: ${String(length)} chars > ${String(TEXT_BODY_MAX_CHARS)} cap (media[${String(index)}] of ${String(media.length)}, via ${path})`,
+    );
+    oversizeTextBlocked.add(1, buildOversizeTextAttributes(path));
+    return false;
+  });
+}
 
 function buildWaPayload(opts: {
   user_id: string;
@@ -417,7 +444,9 @@ export async function sendMessage(opts: {
     claimAtMs = Date.now();
   }
 
-  for (const item of opts.media) {
+  const media = dropOversizeTextItems(opts.media, opts.user_id, 'sendMessage');
+
+  for (const item of media) {
     const response = await sendSingleItem({
       user_id: opts.user_id,
       item,
@@ -484,7 +513,13 @@ export async function sendNotification(opts: {
     return { status: 200, delivered: true };
   }
 
-  for (const item of opts.media) {
+  const media = dropOversizeTextItems(
+    opts.media,
+    opts.user_id,
+    'sendNotification',
+  );
+
+  for (const item of media) {
     const payload = buildWaPayload({ user_id: opts.user_id, item });
     const response = await fetch(graphUrl(), {
       method: 'POST',

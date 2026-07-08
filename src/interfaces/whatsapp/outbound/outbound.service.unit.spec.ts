@@ -26,9 +26,15 @@ jest.mock('@opentelemetry/api', () => ({
 }));
 
 const mockMetricsRecord = jest.fn();
+const mockOversizeAdd = jest.fn();
 jest.mock('../../../otel/metrics', () => ({
   messageE2eDuration: { record: mockMetricsRecord },
   buildE2eAttributes: (outcome: string) => ({ outcome, load_test: 'false' }),
+  oversizeTextBlocked: { add: mockOversizeAdd },
+  buildOversizeTextAttributes: (path: string) => ({
+    path,
+    load_test: 'false',
+  }),
 }));
 
 import { Logger } from '@nestjs/common';
@@ -38,6 +44,7 @@ import {
   sendNotification,
   downloadMedia,
   uploadMedia,
+  TEXT_BODY_MAX_CHARS,
 } from './outbound.service';
 
 const globalFetch = global.fetch;
@@ -893,5 +900,124 @@ describe('load-test phone-prefix stub', () => {
       });
       expect(fetchSpy).toHaveBeenCalledTimes(1);
     });
+  });
+});
+
+// ---------------- oversize text cap -------------------------------------
+
+describe('oversize text body cap', () => {
+  const baggageEntry = {
+    getEntry: jest.fn().mockReturnValue({ value: '1700000000000' }),
+  };
+
+  function textItem(chars: number) {
+    return { type: 'text' as const, body: 'x'.repeat(chars) };
+  }
+
+  it('exports the WhatsApp limit as the cap', () => {
+    expect(TEXT_BODY_MAX_CHARS).toBe(4096);
+  });
+
+  it('sendMessage: a body at exactly the cap is sent', async () => {
+    mockGetBaggage.mockReturnValue(baggageEntry);
+    const fetchSpy = jest
+      .fn()
+      .mockResolvedValue(mockResponse({ status: 200, json: {} }));
+    global.fetch = fetchSpy as never;
+    const out = await sendMessage({
+      user_id: '919999990001',
+      wamid: 'wamid.cap',
+      consecutive: true,
+      media: [textItem(TEXT_BODY_MAX_CHARS)],
+    });
+    expect(out.body.delivered).toBe(true);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(mockOversizeAdd).not.toHaveBeenCalled();
+  });
+
+  it('sendMessage: an oversize body is blocked — logged, counted, not sent — while the rest of the bundle still goes out', async () => {
+    mockGetBaggage.mockReturnValue(baggageEntry);
+    const errorSpy = jest
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => undefined);
+    const fetchSpy = jest
+      .fn()
+      .mockResolvedValue(mockResponse({ status: 200, json: {} }));
+    global.fetch = fetchSpy as never;
+
+    const out = await sendMessage({
+      user_id: '919999990001',
+      wamid: 'wamid.cap',
+      consecutive: true,
+      media: [
+        { type: 'audio' as const, url: 'https://cdn.example/a.mp3' },
+        textItem(TEXT_BODY_MAX_CHARS + 1),
+      ],
+    });
+
+    expect(out.body.delivered).toBe(true);
+    // Only the audio item reached WhatsApp.
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(fetchSpy.mock.calls[0][1].body).toContain('audio');
+    // Observability: counter with path attribute + ERROR log with the details.
+    expect(mockOversizeAdd).toHaveBeenCalledWith(1, {
+      path: 'sendMessage',
+      load_test: 'false',
+    });
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('4097 chars > 4096 cap'),
+    );
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('media[1] of 2'),
+    );
+    errorSpy.mockRestore();
+  });
+
+  it('sendNotification: an oversize body is blocked with the sendNotification path attribute', async () => {
+    const errorSpy = jest
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => undefined);
+    const fetchSpy = jest
+      .fn()
+      .mockResolvedValue(mockResponse({ status: 200, json: {} }));
+    global.fetch = fetchSpy as never;
+
+    const out = await sendNotification({
+      user_id: '919999990001',
+      media: [
+        textItem(TEXT_BODY_MAX_CHARS + 100),
+        { type: 'video' as const, url: 'https://cdn.example/v.mp4' },
+      ],
+    });
+
+    expect(out.delivered).toBe(true);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(fetchSpy.mock.calls[0][1].body).toContain('video');
+    expect(mockOversizeAdd).toHaveBeenCalledWith(1, {
+      path: 'sendNotification',
+      load_test: 'false',
+    });
+    errorSpy.mockRestore();
+  });
+
+  it('non-text items are never length-checked', async () => {
+    mockGetBaggage.mockReturnValue(baggageEntry);
+    const fetchSpy = jest
+      .fn()
+      .mockResolvedValue(mockResponse({ status: 200, json: {} }));
+    global.fetch = fetchSpy as never;
+    await sendMessage({
+      user_id: '919999990001',
+      wamid: 'wamid.cap',
+      consecutive: true,
+      media: [
+        {
+          type: 'video' as const,
+          url: `https://cdn.example/${'v'.repeat(5000)}.mp4`,
+        },
+      ],
+    });
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(mockOversizeAdd).not.toHaveBeenCalled();
   });
 });
