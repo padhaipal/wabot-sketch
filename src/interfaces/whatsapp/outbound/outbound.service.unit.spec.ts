@@ -1000,6 +1000,69 @@ describe('oversize text body cap', () => {
     errorSpy.mockRestore();
   });
 
+  it('sendMessage: an ALL-oversize bundle returns oversize-text-blocked WITHOUT consuming the inflight claim', async () => {
+    mockGetBaggage.mockReturnValue(baggageEntry);
+    const errorSpy = jest
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => undefined);
+    const fetchSpy = jest.fn();
+    global.fetch = fetchSpy as never;
+
+    const out = await sendMessage({
+      user_id: '919999990001',
+      wamid: 'wamid.cap',
+      consecutive: false,
+      media: [textItem(TEXT_BODY_MAX_CHARS + 1)],
+    });
+
+    expect(out).toEqual({
+      status: 200,
+      body: { delivered: false, reason: 'oversize-text-blocked' },
+    });
+    // Nothing sent, claim untouched (timeout fallback can still fire),
+    // consec key untouched.
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(mockConnEval).not.toHaveBeenCalled();
+    expect(mockConnDel).not.toHaveBeenCalled();
+    expect(mockOversizeAdd).toHaveBeenCalledTimes(1);
+    errorSpy.mockRestore();
+  });
+
+  it('sendNotification: an ALL-oversize bundle returns delivered=false without any WhatsApp call', async () => {
+    const errorSpy = jest
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => undefined);
+    const fetchSpy = jest.fn();
+    global.fetch = fetchSpy as never;
+
+    const out = await sendNotification({
+      user_id: '919999990001',
+      media: [textItem(TEXT_BODY_MAX_CHARS + 1)],
+    });
+
+    expect(out).toEqual({ status: 200, delivered: false });
+    expect(fetchSpy).not.toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
+
+  it('counts Unicode code points, not UTF-16 units (emoji-heavy body under the cap sends)', async () => {
+    mockGetBaggage.mockReturnValue(baggageEntry);
+    const fetchSpy = jest
+      .fn()
+      .mockResolvedValue(mockResponse({ status: 200, json: {} }));
+    global.fetch = fetchSpy as never;
+    // 2100 astral code points = 4200 UTF-16 units — must NOT be blocked.
+    const out = await sendMessage({
+      user_id: '919999990001',
+      wamid: 'wamid.cap',
+      consecutive: true,
+      media: [{ type: 'text' as const, body: '\u{1F600}'.repeat(2100) }],
+    });
+    expect(out.body.delivered).toBe(true);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(mockOversizeAdd).not.toHaveBeenCalled();
+  });
+
   it('non-text items are never length-checked', async () => {
     mockGetBaggage.mockReturnValue(baggageEntry);
     const fetchSpy = jest

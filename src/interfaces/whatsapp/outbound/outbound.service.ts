@@ -185,7 +185,9 @@ end
 // so an oversize body is blocked here — dropping just the offending item and
 // still delivering the rest of the bundle — rather than letting the whole
 // send fail at Meta's end. Each block emits an ERROR log and increments the
-// wabot.outbound.oversize_text_blocked counter.
+// wabot.outbound.oversize_text_blocked counter. Length is counted in Unicode
+// code points (Array.from), not UTF-16 units, to match Meta's "characters";
+// for Devanagari (BMP) the two are identical.
 export const TEXT_BODY_MAX_CHARS = 4096;
 
 function dropOversizeTextItems(
@@ -195,7 +197,7 @@ function dropOversizeTextItems(
 ): OutboundMediaItemDto[] {
   return media.filter((item, index) => {
     if (item.type !== 'text') return true;
-    const length = item.body?.length ?? 0;
+    const length = Array.from(item.body ?? '').length;
     if (length <= TEXT_BODY_MAX_CHARS) return true;
     logger.error(
       `Blocked oversize text item for user ${toLogId(user_id)}: ${String(length)} chars > ${String(TEXT_BODY_MAX_CHARS)} cap (media[${String(index)}] of ${String(media.length)}, via ${path})`,
@@ -411,6 +413,18 @@ export async function sendMessage(opts: {
     );
   };
 
+  // Filter BEFORE the inflight claim: if the whole bundle is oversize text,
+  // returning here leaves the inflight key intact so the timeout machinery
+  // can still deliver the fallback — consuming the claim and sending nothing
+  // would report success while the student receives silence.
+  const media = dropOversizeTextItems(opts.media, opts.user_id, 'sendMessage');
+  if (media.length === 0 && opts.media.length > 0) {
+    return {
+      status: 200,
+      body: { delivered: false, reason: 'oversize-text-blocked' },
+    };
+  }
+
   let inflightKey: string | null = null;
   let consecutiveKey: string | null = null;
   let claimedTtlMs = 0;
@@ -443,8 +457,6 @@ export async function sendMessage(opts: {
     claimedTtlMs = claim;
     claimAtMs = Date.now();
   }
-
-  const media = dropOversizeTextItems(opts.media, opts.user_id, 'sendMessage');
 
   for (const item of media) {
     const response = await sendSingleItem({
@@ -508,16 +520,21 @@ export async function sendNotification(opts: {
   user_id: string;
   media: OutboundMediaItemDto[];
 }): Promise<SendNotificationResult> {
-  if (isLoadTestUser(opts.user_id)) {
-    await loadTestDelay();
-    return { status: 200, delivered: true };
-  }
-
+  // Filter before the load-test stub so both entry points count oversize
+  // blocks identically (the load_test metric attribute segments them).
   const media = dropOversizeTextItems(
     opts.media,
     opts.user_id,
     'sendNotification',
   );
+  if (media.length === 0 && opts.media.length > 0) {
+    return { status: 200, delivered: false };
+  }
+
+  if (isLoadTestUser(opts.user_id)) {
+    await loadTestDelay();
+    return { status: 200, delivered: true };
+  }
 
   for (const item of media) {
     const payload = buildWaPayload({ user_id: opts.user_id, item });
