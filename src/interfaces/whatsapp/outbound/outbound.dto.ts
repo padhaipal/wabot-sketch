@@ -124,7 +124,7 @@ export class SendMessageNotDeliveredDto {
   delivered!: false;
 
   @IsString()
-  reason!: 'inflight-expired' | 'whatsapp-error';
+  reason!: 'inflight-expired' | 'whatsapp-error' | 'oversize-text-blocked';
 }
 
 export type SendMessageResultDto =

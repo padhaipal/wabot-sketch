@@ -4,8 +4,10 @@
 // the dashboard, so drift here would silently break queries.
 
 const mockCreateHistogram = jest.fn().mockReturnValue({ record: jest.fn() });
+const mockCreateCounter = jest.fn().mockReturnValue({ add: jest.fn() });
 const mockGetMeter = jest.fn().mockReturnValue({
   createHistogram: mockCreateHistogram,
+  createCounter: mockCreateCounter,
 });
 const mockGetBaggage = jest.fn();
 const mockContextActive = jest.fn().mockReturnValue('active-ctx');
@@ -70,6 +72,50 @@ describe('otel/metrics', () => {
   it('the exported histogram is the object returned by createHistogram (record is callable)', () => {
     expect(typeof messageE2eDuration.record).toBe('function');
     expect(() => messageE2eDuration.record(123)).not.toThrow();
+  });
+
+  it('exports an oversizeTextBlocked counter with the contract name "wabot.outbound.oversize_text_blocked"', () => {
+    expect(mockCreateCounter).toHaveBeenCalledWith(
+      'wabot.outbound.oversize_text_blocked',
+      expect.objectContaining({
+        description: expect.stringMatching(/4096-char body limit/) as string,
+      }),
+    );
+    const oversizeTextBlocked = require('./metrics').oversizeTextBlocked as {
+      add: jest.Mock;
+    };
+    expect(typeof oversizeTextBlocked.add).toBe('function');
+  });
+});
+
+describe('buildOversizeTextAttributes', () => {
+  let buildOversizeTextAttributes: (path: string) => Record<string, string>;
+
+  beforeAll(() => {
+    buildOversizeTextAttributes =
+      require('./metrics').buildOversizeTextAttributes;
+  });
+
+  beforeEach(() => {
+    mockGetBaggage.mockReset();
+  });
+
+  it('carries the send path and defaults load_test to "false"', () => {
+    mockGetBaggage.mockReturnValue(undefined);
+    expect(buildOversizeTextAttributes('sendMessage')).toEqual({
+      path: 'sendMessage',
+      load_test: 'false',
+    });
+  });
+
+  it('reads padhaipal.load_test from baggage when present', () => {
+    mockGetBaggage.mockReturnValue(
+      makeBaggage({ 'padhaipal.load_test': 'true' }),
+    );
+    expect(buildOversizeTextAttributes('sendNotification')).toEqual({
+      path: 'sendNotification',
+      load_test: 'true',
+    });
   });
 });
 
