@@ -18,6 +18,47 @@ export const messageE2eDuration = meter.createHistogram(
   },
 );
 
+// ─── user_e2e: the user-perceived SLO ────────────────────────────────────────
+// Meta-clock milliseconds from the user pressing send (inbound
+// `messages[].timestamp`) to the FIRST reply item reaching their device
+// (Meta's delivered/read `statuses[].timestamp`). Both ends are stamped by
+// WhatsApp's servers, so there is no skew against our clocks — but
+// resolution is 1 second, hence no sub-second buckets. Correlation state
+// lives in Redis (see otel/user-e2e.ts); recording happens in the status
+// processor. `late` = delivered after USER_E2E_LATE_THRESHOLD_MS (phone
+// offline etc.) — query latency percentiles on outcome="delivered" only.
+export const userE2eDuration = meter.createHistogram(
+  'wabot.user_e2e_duration_ms',
+  {
+    description:
+      'User-perceived ms from user send (Meta message timestamp) to first reply delivered to the device (Meta status timestamp).',
+    unit: 'ms',
+    advice: {
+      explicitBucketBoundaries: [
+        1000, 2000, 3000, 4000, 5000, 7500, 10000, 15000, 20000, 30000, 45000,
+        60000,
+      ],
+    },
+  },
+);
+
+export type UserE2eOutcome = 'delivered' | 'late';
+
+// Unlike buildE2eAttributes this does NOT read baggage: the delivered-status
+// webhook is a fresh Meta request with no baggage, so load_test/test_phase
+// travel through the Redis correlation payload instead.
+export function buildUserE2eAttributes(
+  outcome: UserE2eOutcome,
+  loadTest: string,
+  testPhase?: string,
+): Record<string, string> {
+  const attrs: Record<string, string> = { outcome, load_test: loadTest };
+  if (typeof testPhase === 'string' && testPhase.length > 0) {
+    attrs.test_phase = testPhase;
+  }
+  return attrs;
+}
+
 export type MessageE2eOutcome =
   | 'success'
   | 'delivered'

@@ -11,10 +11,17 @@ process.env.LOG_PII_HMAC_KEY ??=
 const mockConnEval = jest.fn();
 const mockConnSet = jest.fn();
 const mockConnDel = jest.fn();
+const mockConnGet = jest.fn();
+const mockStatusQueueAdd = jest.fn();
 jest.mock('../../redis/queues', () => ({
-  connection: { eval: mockConnEval, set: mockConnSet, del: mockConnDel },
-  createQueue: () => null,
-  QUEUE_NAMES: {},
+  connection: {
+    eval: mockConnEval,
+    set: mockConnSet,
+    del: mockConnDel,
+    get: mockConnGet,
+  },
+  createQueue: () => ({ add: mockStatusQueueAdd }),
+  QUEUE_NAMES: { PROCESS_STATUS: 'process-status' },
 }));
 
 const mockGetBaggage = jest.fn();
@@ -22,6 +29,7 @@ jest.mock('@opentelemetry/api', () => ({
   context: { active: jest.fn().mockReturnValue('active-ctx') },
   propagation: {
     getBaggage: (...a: unknown[]) => mockGetBaggage(...a),
+    inject: jest.fn(),
   },
 }));
 
@@ -65,6 +73,8 @@ function mockResponse(opts: {
 beforeEach(() => {
   jest.clearAllMocks();
   mockGetBaggage.mockReturnValue(undefined);
+  mockConnGet.mockResolvedValue(null);
+  mockStatusQueueAdd.mockResolvedValue(undefined);
 });
 afterEach(() => {
   global.fetch = globalFetch;
@@ -666,5 +676,259 @@ describe('uploadMedia URL + headers', () => {
     expect(headers.Authorization).toBe('Bearer test-token');
     // Content-Type intentionally omitted so the FormData boundary header wins.
     expect(headers['Content-Type']).toBeUndefined();
+  });
+});
+
+// ─── user_e2e plumbing: mapping writes, sent marker, claim-miss gating ───────
+
+function baggageWith(entries: Record<string, string>): {
+  getEntry: (k: string) => { value: string } | undefined;
+} {
+  return {
+    getEntry: (k: string) =>
+      entries[k] !== undefined ? { value: entries[k] } : undefined,
+  };
+}
+
+describe('sendMessage — user_e2e mapping + sent marker', () => {
+  const TS = '1700000000000';
+
+  it('stores the reply-wamid mapping (EX 900) and the sent marker (EX 60) on success', async () => {
+    mockGetBaggage.mockReturnValue(
+      baggageWith({ 'wabot.msg.ts_ms': TS, 'padhaipal.load_test': 'false' }),
+    );
+    mockConnEval.mockResolvedValue(25_000);
+    mockConnDel.mockResolvedValue(1);
+    global.fetch = jest.fn().mockResolvedValue(
+      mockResponse({
+        status: 200,
+        json: { messages: [{ id: 'wamid.REPLY1' }] },
+      }),
+    ) as never;
+
+    const out = await sendMessage({
+      user_id: '919999990001',
+      wamid: 'wamid.ORIG',
+      consecutive: false,
+      media: [{ type: 'text', body: 'hi' }],
+    });
+    expect(out.body.delivered).toBe(true);
+
+    expect(mockConnSet).toHaveBeenCalledWith(
+      expect.stringContaining('user-e2e:wamid:wamid.REPLY1'),
+      JSON.stringify({ ts: 1_700_000_000_000, lt: 'false' }),
+      'EX',
+      900,
+    );
+    expect(mockConnSet).toHaveBeenCalledWith(
+      expect.stringContaining('sent:wamid:wamid.ORIG'),
+      '1',
+      'EX',
+      60,
+    );
+    // Real (non-load-test) user: no synthetic status.
+    expect(mockStatusQueueAdd).not.toHaveBeenCalled();
+  });
+
+  it('maps only the FIRST reply item of a multi-item turn', async () => {
+    mockGetBaggage.mockReturnValue(baggageWith({ 'wabot.msg.ts_ms': TS }));
+    mockConnEval.mockResolvedValue(25_000);
+    mockConnDel.mockResolvedValue(1);
+    const fetchSpy = jest
+      .fn()
+      .mockResolvedValueOnce(
+        mockResponse({
+          status: 200,
+          json: { messages: [{ id: 'wamid.FIRST' }] },
+        }),
+      )
+      .mockResolvedValueOnce(
+        mockResponse({
+          status: 200,
+          json: { messages: [{ id: 'wamid.SECOND' }] },
+        }),
+      );
+    global.fetch = fetchSpy as never;
+
+    await sendMessage({
+      user_id: '919999990001',
+      wamid: 'wamid.ORIG',
+      consecutive: false,
+      media: [
+        { type: 'text', body: 'a' },
+        { type: 'text', body: 'b' },
+      ],
+    });
+
+    const mappingWrites = mockConnSet.mock.calls.filter((c) =>
+      String(c[0]).includes('user-e2e:wamid:'),
+    );
+    expect(mappingWrites).toHaveLength(1);
+    expect(mappingWrites[0][0]).toContain('wamid.FIRST');
+  });
+
+  it('skips the mapping (but still sets the marker) when ts baggage is missing', async () => {
+    mockConnEval.mockResolvedValue(25_000);
+    mockConnDel.mockResolvedValue(1);
+    global.fetch = jest.fn().mockResolvedValue(
+      mockResponse({
+        status: 200,
+        json: { messages: [{ id: 'wamid.REPLY1' }] },
+      }),
+    ) as never;
+
+    await sendMessage({
+      user_id: '919999990001',
+      wamid: 'wamid.ORIG',
+      consecutive: false,
+      media: [{ type: 'text', body: 'hi' }],
+    });
+
+    const mappingWrites = mockConnSet.mock.calls.filter((c) =>
+      String(c[0]).includes('user-e2e:wamid:'),
+    );
+    expect(mappingWrites).toHaveLength(0);
+    expect(mockConnSet).toHaveBeenCalledWith(
+      expect.stringContaining('sent:wamid:wamid.ORIG'),
+      '1',
+      'EX',
+      60,
+    );
+  });
+
+  it('carries test_phase into the mapping payload and enqueues a synthetic delivered status for load-test users', async () => {
+    process.env.LOAD_TEST_PHONE_PREFIX = '911000';
+    try {
+      mockGetBaggage.mockReturnValue(
+        baggageWith({
+          'wabot.msg.ts_ms': TS,
+          'padhaipal.load_test': 'true',
+          'padhaipal.test_phase': 'phase_1',
+        }),
+      );
+      mockConnEval.mockResolvedValue(25_000);
+      mockConnDel.mockResolvedValue(1);
+
+      await sendMessage({
+        user_id: '911000000001',
+        wamid: 'wamid.ORIG',
+        consecutive: false,
+        media: [{ type: 'text', body: 'hi' }],
+      });
+
+      const mappingWrites = mockConnSet.mock.calls.filter((c) =>
+        String(c[0]).includes('user-e2e:wamid:'),
+      );
+      expect(mappingWrites).toHaveLength(1);
+      expect(JSON.parse(mappingWrites[0][1] as string)).toEqual({
+        ts: 1_700_000_000_000,
+        lt: 'true',
+        tp: 'phase_1',
+      });
+
+      expect(mockStatusQueueAdd).toHaveBeenCalledTimes(1);
+      const [jobName, jobData, jobOpts] = mockStatusQueueAdd.mock
+        .calls[0] as unknown[];
+      expect(jobName).toBe('status');
+      const data = jobData as {
+        status: { id: string; status: string; recipient_id: string };
+      };
+      expect(data.status.status).toBe('delivered');
+      expect(data.status.recipient_id).toBe('911000000001');
+      // Reply wamid comes from the load-test stub response (stub-<uuid>).
+      expect(data.status.id).toMatch(/^stub-/);
+      expect(jobOpts).toEqual({ delay: 750 });
+    } finally {
+      delete process.env.LOAD_TEST_PHONE_PREFIX;
+    }
+  });
+});
+
+describe('sendMessage — claim-miss gating (timeout race vs real expiry)', () => {
+  it('claim=0 + sent marker present → NO inflight-expired metric, benign log', async () => {
+    mockGetBaggage.mockReturnValue(
+      baggageWith({ 'wabot.msg.ts_ms': '1700000000000' }),
+    );
+    mockConnEval.mockResolvedValue(0);
+    mockConnGet.mockResolvedValue('1');
+    const logSpy = jest
+      .spyOn(Logger.prototype, 'log')
+      .mockImplementation(() => undefined);
+    const warnSpy = jest
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+    try {
+      const out = await sendMessage({
+        user_id: '919999990001',
+        wamid: 'wamid.ORIG',
+        consecutive: false,
+        media: [{ type: 'text', body: 'hi' }],
+      });
+      expect(out.body).toEqual({
+        delivered: false,
+        reason: 'inflight-expired',
+      });
+      expect(mockMetricsRecord).not.toHaveBeenCalled();
+      expect(logSpy).toHaveBeenCalledWith(
+        expect.stringContaining('benign timeout race'),
+      );
+      expect(warnSpy).not.toHaveBeenCalledWith(
+        expect.stringContaining('Inflight window expired'),
+      );
+    } finally {
+      logSpy.mockRestore();
+      warnSpy.mockRestore();
+    }
+  });
+
+  it('claim=0 + no marker → records inflight-expired exactly as before', async () => {
+    mockGetBaggage.mockReturnValue(
+      baggageWith({ 'wabot.msg.ts_ms': '1700000000000' }),
+    );
+    mockConnEval.mockResolvedValue(0);
+    mockConnGet.mockResolvedValue(null);
+    const warnSpy = jest
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+    try {
+      const out = await sendMessage({
+        user_id: '919999990001',
+        wamid: 'wamid.ORIG',
+        consecutive: false,
+        media: [{ type: 'text', body: 'hi' }],
+      });
+      expect(out.body).toEqual({
+        delivered: false,
+        reason: 'inflight-expired',
+      });
+      expect(mockMetricsRecord).toHaveBeenCalledWith(expect.any(Number), {
+        outcome: 'inflight-expired',
+        load_test: 'false',
+      });
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Inflight window expired'),
+      );
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  it('claim=0 + marker read FAILS → falls back to recording (over-count, never under-count)', async () => {
+    mockGetBaggage.mockReturnValue(
+      baggageWith({ 'wabot.msg.ts_ms': '1700000000000' }),
+    );
+    mockConnEval.mockResolvedValue(0);
+    mockConnGet.mockRejectedValue(new Error('redis down'));
+    const out = await sendMessage({
+      user_id: '919999990001',
+      wamid: 'wamid.ORIG',
+      consecutive: false,
+      media: [{ type: 'text', body: 'hi' }],
+    });
+    expect(out.body.reason).toBe('inflight-expired');
+    expect(mockMetricsRecord).toHaveBeenCalledWith(
+      expect.any(Number),
+      expect.objectContaining({ outcome: 'inflight-expired' }),
+    );
   });
 });

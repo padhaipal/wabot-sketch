@@ -2,8 +2,20 @@ import { Logger } from '@nestjs/common';
 import { context, propagation } from '@opentelemetry/api';
 import { randomUUID } from 'node:crypto';
 import { Readable } from 'node:stream';
-import { connection } from '../../redis/queues.js';
-import { BAGGAGE_LOAD_TEST } from '../../../otel/baggage-keys.js';
+import type { Queue } from 'bullmq';
+import { connection, createQueue, QUEUE_NAMES } from '../../redis/queues.js';
+import {
+  BAGGAGE_LOAD_TEST,
+  BAGGAGE_TEST_PHASE,
+} from '../../../otel/baggage-keys.js';
+import {
+  SENT_MARKER_TTL_S,
+  USER_E2E_MAPPING_TTL_S,
+  sentMarkerKey,
+  userE2eKey,
+  type UserE2eMapping,
+} from '../../../otel/user-e2e.js';
+import type { OtelCarrier } from '../../../otel/otel.dto.js';
 import {
   buildE2eAttributes,
   buildOversizeTextAttributes,
@@ -382,6 +394,89 @@ async function deleteConsecutiveWithRetry(
   }
 }
 
+// ─── user_e2e plumbing (observability only — no send behavior changes) ──────
+
+// Reads the reply wamid Meta returns for a successful send. Consuming the
+// body here is safe: nothing else reads success-response bodies.
+async function extractReplyWamid(
+  response: Response,
+  user_id: string,
+): Promise<string | null> {
+  try {
+    const body = (await response.json()) as { messages?: { id?: string }[] };
+    return body.messages?.[0]?.id ?? null;
+  } catch {
+    logger.warn(
+      `Could not parse reply wamid from WA response for user ${toLogId(user_id)} — user_e2e will not be recorded for this turn`,
+    );
+    return null;
+  }
+}
+
+// Non-fatal: a lost mapping means one missing user_e2e sample, never a
+// failed send.
+async function storeUserE2eMapping(opts: {
+  replyWamid: string;
+  mapping: UserE2eMapping;
+  user_id: string;
+}): Promise<void> {
+  try {
+    await connection.set(
+      userE2eKey(opts.replyWamid),
+      JSON.stringify(opts.mapping),
+      'EX',
+      USER_E2E_MAPPING_TTL_S,
+    );
+  } catch (err) {
+    logger.warn(
+      `user_e2e mapping write failed for user ${toLogId(opts.user_id)}: ${(err as Error).message}`,
+    );
+  }
+}
+
+// Load-test stub parity: real recipients produce a delivered-status webhook
+// from Meta; stubbed sends synthesize one ~750 ms later through the SAME
+// process-status pipeline so user_e2e semantics match production exactly.
+const SYNTHETIC_STATUS_DELAY_MS = 750;
+let syntheticStatusQueue: Queue | null = null;
+function enqueueSyntheticDeliveredStatus(opts: {
+  replyWamid: string;
+  user_id: string;
+}): void {
+  try {
+    // Lazy: only load-test traffic ever needs this queue handle. createQueue
+    // is stubbed to null in unit specs — guard rather than crash.
+    syntheticStatusQueue ??= createQueue(QUEUE_NAMES.PROCESS_STATUS);
+  } catch {
+    return;
+  }
+  if (!syntheticStatusQueue) return;
+  const carrier: OtelCarrier = {};
+  propagation.inject(context.active(), carrier);
+  const deliveredAtS = Math.round(
+    (Date.now() + SYNTHETIC_STATUS_DELAY_MS) / 1000,
+  );
+  syntheticStatusQueue
+    .add(
+      'status',
+      {
+        otel: { carrier },
+        status: {
+          id: opts.replyWamid,
+          status: 'delivered',
+          timestamp: String(deliveredAtS),
+          recipient_id: opts.user_id,
+        },
+      },
+      { delay: SYNTHETIC_STATUS_DELAY_MS },
+    )
+    .catch((err: unknown) => {
+      logger.warn(
+        `Synthetic delivered-status enqueue failed for user ${toLogId(opts.user_id)}: ${(err as Error).message}`,
+      );
+    });
+}
+
 export async function sendMessage(opts: {
   user_id: string;
   wamid: string;
@@ -397,6 +492,9 @@ export async function sendMessage(opts: {
   const baggage = propagation.getBaggage(context.active());
   const tsRaw = baggage?.getEntry('wabot.msg.ts_ms')?.value;
   const originalTsMs = tsRaw ? parseInt(tsRaw, 10) : undefined;
+  const baggageLoadTest =
+    baggage?.getEntry(BAGGAGE_LOAD_TEST)?.value ?? 'false';
+  const baggageTestPhase = baggage?.getEntry(BAGGAGE_TEST_PHASE)?.value;
   if (originalTsMs === undefined || Number.isNaN(originalTsMs)) {
     logger.warn(
       `Missing wabot.msg.ts_ms baggage in sendMessage for user ${toLogId(opts.user_id)}, wamid=${opts.wamid} — delivery latency metric will not be recorded`,
@@ -443,11 +541,30 @@ export async function sendMessage(opts: {
 
     if (claim === 0) {
       // Either key absent: another invocation already claimed and sent
-      // (benign race) OR the keys were never set / already expired.
-      logger.warn(
-        `Inflight window expired (no delivery) for user ${toLogId(opts.user_id)}, wamid ${opts.wamid}`,
-      );
-      recordDeliveryOutcome('inflight-expired');
+      // (benign race — typically the +20 s timeout job firing after the
+      // reply went out) OR the keys were never set / already expired. The
+      // sent marker distinguishes the two so the e2e histogram only counts
+      // inflight-expired when the user actually got nothing; before this
+      // gate EVERY delivered message also recorded a bogus ~20 s
+      // inflight-expired sample (the fake 24 s p95 of 2026-07-08).
+      let alreadySent = false;
+      try {
+        alreadySent =
+          (await connection.get(sentMarkerKey(opts.wamid))) !== null;
+      } catch {
+        // Marker unreadable — fall through to the old (over-counting)
+        // behavior rather than under-count a real expiry.
+      }
+      if (alreadySent) {
+        logger.log(
+          `Inflight already claimed and sent for user ${toLogId(opts.user_id)}, wamid ${opts.wamid} — benign timeout race`,
+        );
+      } else {
+        logger.warn(
+          `Inflight window expired (no delivery) for user ${toLogId(opts.user_id)}, wamid ${opts.wamid}`,
+        );
+        recordDeliveryOutcome('inflight-expired');
+      }
       return {
         status: 200,
         body: { delivered: false, reason: 'inflight-expired' },
@@ -458,6 +575,7 @@ export async function sendMessage(opts: {
     claimAtMs = Date.now();
   }
 
+  let firstReplyWamid: string | null = null;
   for (const item of media) {
     const response = await sendSingleItem({
       user_id: opts.user_id,
@@ -499,11 +617,54 @@ export async function sendMessage(opts: {
         body: { delivered: false, reason: 'whatsapp-error' as const },
       };
     }
+
+    // user_e2e is defined against the FIRST reply item of the turn
+    // (time-to-first-response); later items of the same turn are ignored.
+    if (
+      firstReplyWamid === null &&
+      originalTsMs !== undefined &&
+      !Number.isNaN(originalTsMs)
+    ) {
+      firstReplyWamid = await extractReplyWamid(response, opts.user_id);
+      if (firstReplyWamid) {
+        await storeUserE2eMapping({
+          replyWamid: firstReplyWamid,
+          mapping: {
+            ts: originalTsMs,
+            lt: baggageLoadTest,
+            ...(baggageTestPhase ? { tp: baggageTestPhase } : {}),
+          },
+          user_id: opts.user_id,
+        });
+        if (isLoadTestUser(opts.user_id)) {
+          enqueueSyntheticDeliveredStatus({
+            replyWamid: firstReplyWamid,
+            user_id: opts.user_id,
+          });
+        }
+      }
+    }
   }
 
   // All sends succeeded. Release the per-user consec lock.
   if (consecutiveKey) {
     await deleteConsecutiveWithRetry(consecutiveKey, opts.user_id);
+  }
+
+  // Marker consumed by the +20 s timeout job's claim miss (see claim === 0
+  // above). Non-fatal: losing it degrades to the old double-record, never
+  // affects the send.
+  try {
+    await connection.set(
+      sentMarkerKey(opts.wamid),
+      '1',
+      'EX',
+      SENT_MARKER_TTL_S,
+    );
+  } catch (err) {
+    logger.warn(
+      `Sent-marker write failed for user ${toLogId(opts.user_id)}: ${(err as Error).message}`,
+    );
   }
 
   recordDeliveryOutcome('delivered');

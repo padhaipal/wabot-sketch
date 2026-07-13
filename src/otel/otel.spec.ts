@@ -56,6 +56,8 @@ jest.mock('@opentelemetry/sdk-logs', () => ({
 }));
 jest.mock('@opentelemetry/sdk-metrics', () => ({
   PeriodicExportingMetricReader: mockPeriodicExportingMetricReader,
+  AggregationType: { DROP: 0 },
+  createAllowListAttributesProcessor: jest.fn(() => 'allow-list-processor'),
 }));
 jest.mock('@opentelemetry/sdk-node', () => ({
   NodeSDK: mockNodeSDKCtor.mockImplementation(function (this: unknown) {

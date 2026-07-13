@@ -193,3 +193,45 @@ describe('buildE2eAttributes', () => {
     expect(mockGetBaggage).toHaveBeenLastCalledWith('active-ctx');
   });
 });
+
+describe('buildUserE2eAttributes', () => {
+  // Unlike buildE2eAttributes this takes labels as arguments (they travel
+  // through the Redis correlation payload, not baggage — the delivered
+  // status webhook is a fresh Meta request with no baggage attached).
+
+  const { buildUserE2eAttributes } = require('./metrics') as {
+    buildUserE2eAttributes: (
+      outcome: string,
+      loadTest: string,
+      testPhase?: string,
+    ) => Record<string, string>;
+  };
+
+  it('builds outcome + load_test without test_phase when absent', () => {
+    expect(buildUserE2eAttributes('delivered', 'false')).toEqual({
+      outcome: 'delivered',
+      load_test: 'false',
+    });
+  });
+
+  it('includes test_phase when provided and non-empty', () => {
+    expect(buildUserE2eAttributes('late', 'true', 'phase_2')).toEqual({
+      outcome: 'late',
+      load_test: 'true',
+      test_phase: 'phase_2',
+    });
+  });
+
+  it('omits test_phase when empty string', () => {
+    expect(buildUserE2eAttributes('delivered', 'true', '')).toEqual({
+      outcome: 'delivered',
+      load_test: 'true',
+    });
+  });
+
+  it('does not read baggage at all', () => {
+    mockGetBaggage.mockClear();
+    buildUserE2eAttributes('delivered', 'false');
+    expect(mockGetBaggage).not.toHaveBeenCalled();
+  });
+});

@@ -10,7 +10,12 @@ import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-proto';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-proto';
 import { UndiciInstrumentation } from '@opentelemetry/instrumentation-undici';
 import { BatchLogRecordProcessor } from '@opentelemetry/sdk-logs';
-import { PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
+import {
+  AggregationType,
+  createAllowListAttributesProcessor,
+  PeriodicExportingMetricReader,
+  type ViewOptions,
+} from '@opentelemetry/sdk-metrics';
 import { NodeSDK } from '@opentelemetry/sdk-node';
 import { BatchSpanProcessor } from '@opentelemetry/sdk-trace-base';
 import { BaggageSpanProcessor } from './baggage-span-processor.js';
@@ -33,6 +38,76 @@ const traceExporter = new OTLPTraceExporter();
 const metricExporter = new OTLPMetricExporter();
 const logExporter = new OTLPLogExporter();
 
+// Honor the standard OTEL_METRICS_EXPORTER=none (previously inert because we
+// construct exporters explicitly). Staging sets it: its metrics only existed
+// for load-test judgment, which the post-merge gate now does artillery-side,
+// and every staging redeploy otherwise mints a fresh duplicate series set
+// against Grafana Cloud's 10k free-tier active-series cap.
+const metricsDisabled = process.env.OTEL_METRICS_EXPORTER === 'none';
+
+// Series-identity control. Metric series identity in Grafana Cloud comes
+// from service.name + service.instance.id; the SDK default instance id is a
+// random UUID per process, so every redeploy strands a full duplicate
+// series set until it ages out. With a SINGLE replica a constant id keeps
+// series continuous across deploys.
+// ⚠️ If this service ever runs >1 replica, set SERVICE_INSTANCE_ID to
+// something per-replica (e.g. $RAILWAY_REPLICA_ID) — two replicas writing
+// the same series id silently corrupt every counter.
+const serviceInstanceId =
+  process.env.SERVICE_INSTANCE_ID ??
+  process.env.OTEL_SERVICE_NAME ??
+  'wabot-sketch';
+// Injected via OTEL_RESOURCE_ATTRIBUTES (read by the SDK's env resource
+// detector at start) rather than a Resource object — keeps otel.ts free of
+// an extra @opentelemetry/resources import. An operator-provided
+// service.instance.id in the env var wins.
+if (!process.env.OTEL_RESOURCE_ATTRIBUTES?.includes('service.instance.id=')) {
+  process.env.OTEL_RESOURCE_ATTRIBUTES = [
+    process.env.OTEL_RESOURCE_ATTRIBUTES,
+    `service.instance.id=${serviceInstanceId}`,
+  ]
+    .filter(Boolean)
+    .join(',');
+}
+
+// Cardinality diet for the free-tier cap (10k active series). Dropped
+// instruments were never queried in any digest/investigation:
+// - http.client.* — two semconv generations of the same client-latency
+//   histogram (~200 series); wabot→pp/Meta failures surface in logs.
+// - v8js.gc.* — GC pause histogram (~75 series).
+// - v8js heap-space breakdowns — only the totals are ever consulted, so
+//   collapse the per-space attributes into a single series each.
+const metricViews: ViewOptions[] = [
+  {
+    instrumentName: 'http.client.duration',
+    aggregation: { type: AggregationType.DROP },
+  },
+  {
+    instrumentName: 'http.client.request.duration',
+    aggregation: { type: AggregationType.DROP },
+  },
+  {
+    instrumentName: 'v8js.gc.duration',
+    aggregation: { type: AggregationType.DROP },
+  },
+  {
+    instrumentName: 'v8js.memory.heap.space.available_size',
+    aggregation: { type: AggregationType.DROP },
+  },
+  {
+    instrumentName: 'v8js.memory.heap.space.physical_size',
+    aggregation: { type: AggregationType.DROP },
+  },
+  {
+    instrumentName: 'v8js.memory.heap.used',
+    attributesProcessors: [createAllowListAttributesProcessor([])],
+  },
+  {
+    instrumentName: 'v8js.memory.heap.limit',
+    attributesProcessors: [createAllowListAttributesProcessor([])],
+  },
+];
+
 // CompositePropagator combines W3C TraceContext (default) with
 // W3CBaggagePropagator so that padhaipal.load_test / padhaipal.test_phase
 // (and any other baggage entries) serialize into the `baggage` HTTP
@@ -51,9 +126,14 @@ const sdk = new NodeSDK({
     new BaggageSpanProcessor(PROPAGATED_BAGGAGE_KEYS),
     new BatchSpanProcessor(traceExporter),
   ],
-  metricReader: new PeriodicExportingMetricReader({
-    exporter: metricExporter,
-  }),
+  ...(metricsDisabled
+    ? {}
+    : {
+        metricReader: new PeriodicExportingMetricReader({
+          exporter: metricExporter,
+        }),
+        views: metricViews,
+      }),
   logRecordProcessor: new BatchLogRecordProcessor(logExporter),
   // UndiciInstrumentation covers Node 18+'s global `fetch` (used by both
   // services for cross-process HTTP calls). The default auto-instrumentation
