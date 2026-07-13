@@ -53,10 +53,14 @@ const metricsDisabled = process.env.OTEL_METRICS_EXPORTER === 'none';
 // ⚠️ If this service ever runs >1 replica, set SERVICE_INSTANCE_ID to
 // something per-replica (e.g. $RAILWAY_REPLICA_ID) — two replicas writing
 // the same series id silently corrupt every counter.
+// Env-qualified: deployment_environment is NOT part of metric series
+// identity, so without the env suffix staging and production would write
+// into the SAME series and corrupt each other's counters.
 const serviceInstanceId =
   process.env.SERVICE_INSTANCE_ID ??
-  process.env.OTEL_SERVICE_NAME ??
-  'wabot-sketch';
+  `${process.env.OTEL_SERVICE_NAME ?? 'wabot-sketch'}-${
+    process.env.ENV ?? process.env.RAILWAY_ENVIRONMENT_NAME ?? 'development'
+  }`;
 // Injected via OTEL_RESOURCE_ATTRIBUTES (read by the SDK's env resource
 // detector at start) rather than a Resource object — keeps otel.ts free of
 // an extra @opentelemetry/resources import. An operator-provided

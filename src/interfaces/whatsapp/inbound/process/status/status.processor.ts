@@ -47,6 +47,7 @@ async function recordUserE2e(status: StatusDto): Promise<void> {
         deltaMs <= USER_E2E_LATE_THRESHOLD_MS ? 'delivered' : 'late',
         mapping.lt ?? 'false',
         mapping.tp,
+        mapping.rk,
       ),
     );
   } catch (error: unknown) {

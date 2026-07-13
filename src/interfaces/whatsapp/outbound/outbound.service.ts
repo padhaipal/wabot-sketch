@@ -13,6 +13,7 @@ import {
   USER_E2E_MAPPING_TTL_S,
   sentMarkerKey,
   userE2eKey,
+  userE2eTurnKey,
   type UserE2eMapping,
 } from '../../../otel/user-e2e.js';
 import type { OtelCarrier } from '../../../otel/otel.dto.js';
@@ -413,6 +414,33 @@ async function extractReplyWamid(
   }
 }
 
+// user_e2e is time-to-FIRST-response: only the first sendMessage call of a
+// turn may create a mapping (multi-part replies and post-timeout sends for
+// the same inbound wamid would otherwise each record a sample and skew the
+// histogram toward the slowest part). NX on the turn key decides who is
+// first. Non-fatal: on Redis failure we DON'T map (missing one sample
+// beats double-counting a turn).
+async function claimUserE2eTurn(opts: {
+  originalWamid: string;
+  user_id: string;
+}): Promise<boolean> {
+  try {
+    const res = await connection.set(
+      userE2eTurnKey(opts.originalWamid),
+      '1',
+      'EX',
+      USER_E2E_MAPPING_TTL_S,
+      'NX',
+    );
+    return res === 'OK';
+  } catch (err) {
+    logger.warn(
+      `user_e2e turn claim failed for user ${toLogId(opts.user_id)}: ${(err as Error).message}`,
+    );
+    return false;
+  }
+}
+
 // Non-fatal: a lost mapping means one missing user_e2e sample, never a
 // failed send.
 async function storeUserE2eMapping(opts: {
@@ -482,6 +510,11 @@ export async function sendMessage(opts: {
   wamid: string;
   consecutive: boolean | undefined;
   media: OutboundMediaItemDto[];
+  // Labels the user_e2e sample this send may produce. 'fallback' = the
+  // apology/timeout message — delivered on time but still a product
+  // failure, so the SLO must be able to separate it. Observability-only:
+  // send behavior does not branch on it.
+  reply_kind?: 'real' | 'fallback';
 }): Promise<{ status: number; body: SendMessageResultDto }> {
   // Read W3C Baggage from the active context. processMessage /
   // processMessageTimeout / pp/inbound/inbound.controller all wrap the call to
@@ -626,13 +659,20 @@ export async function sendMessage(opts: {
       !Number.isNaN(originalTsMs)
     ) {
       firstReplyWamid = await extractReplyWamid(response, opts.user_id);
-      if (firstReplyWamid) {
+      if (
+        firstReplyWamid &&
+        (await claimUserE2eTurn({
+          originalWamid: opts.wamid,
+          user_id: opts.user_id,
+        }))
+      ) {
         await storeUserE2eMapping({
           replyWamid: firstReplyWamid,
           mapping: {
             ts: originalTsMs,
             lt: baggageLoadTest,
             ...(baggageTestPhase ? { tp: baggageTestPhase } : {}),
+            ...(opts.reply_kind === 'fallback' ? { rk: 'fallback' } : {}),
           },
           user_id: opts.user_id,
         });

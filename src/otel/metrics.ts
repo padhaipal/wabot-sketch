@@ -51,8 +51,16 @@ export function buildUserE2eAttributes(
   outcome: UserE2eOutcome,
   loadTest: string,
   testPhase?: string,
+  replyKind?: string,
 ): Record<string, string> {
-  const attrs: Record<string, string> = { outcome, load_test: loadTest };
+  const attrs: Record<string, string> = {
+    outcome,
+    load_test: loadTest,
+    // A delivered fallback ("sorry, something went wrong" audio) is a
+    // FAILURE that arrived on time — SLO queries must filter
+    // reply_kind="real"; the fallback rate is its own alarm.
+    reply_kind: replyKind === 'fallback' ? 'fallback' : 'real',
+  };
   if (typeof testPhase === 'string' && testPhase.length > 0) {
     attrs.test_phase = testPhase;
   }

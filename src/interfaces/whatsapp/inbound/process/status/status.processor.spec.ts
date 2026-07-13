@@ -41,9 +41,11 @@ jest.mock('../../../../../otel/metrics', () => ({
     outcome: string,
     loadTest: string,
     testPhase?: string,
+    replyKind?: string,
   ) => ({
     outcome,
     load_test: loadTest,
+    reply_kind: replyKind === 'fallback' ? 'fallback' : 'real',
     ...(testPhase ? { test_phase: testPhase } : {}),
   }),
 }));
@@ -255,6 +257,7 @@ describe('processStatus — user_e2e recording', () => {
     expect(mockUserE2eRecord).toHaveBeenCalledWith(5_000, {
       outcome: 'delivered',
       load_test: 'false',
+      reply_kind: 'real',
     });
   });
 
@@ -266,6 +269,7 @@ describe('processStatus — user_e2e recording', () => {
     expect(mockUserE2eRecord).toHaveBeenCalledWith(61_000, {
       outcome: 'late',
       load_test: 'false',
+      reply_kind: 'real',
     });
   });
 
@@ -300,6 +304,7 @@ describe('processStatus — user_e2e recording', () => {
       outcome: 'delivered',
       load_test: 'true',
       test_phase: 'phase_2',
+      reply_kind: 'real',
     });
   });
 
@@ -349,6 +354,17 @@ describe('processStatus — user_e2e recording', () => {
     await expect(processStatus(makeJob(validData))).resolves.toBeUndefined();
     expect(warnSpy).toHaveBeenCalled();
     expect(mockUserE2eRecord).not.toHaveBeenCalled();
+  });
+
+  it('passes reply_kind from the mapping through to the attributes', async () => {
+    mockGetdel.mockResolvedValue(
+      JSON.stringify({ ts: STATUS_MS - 2_000, lt: 'false', rk: 'fallback' }),
+    );
+    await processStatus(makeJob(validData));
+    expect(mockUserE2eRecord).toHaveBeenCalledWith(
+      2_000,
+      expect.objectContaining({ reply_kind: 'fallback' }),
+    );
   });
 
   it('skips silently when the mapping has no numeric ts', async () => {

@@ -25,6 +25,7 @@ export interface UserE2eMapping {
   ts: number; // original user-message timestamp, ms (Meta clock)
   lt: string; // 'true' | 'false' — load_test label
   tp?: string; // test_phase label, load tests only
+  rk?: string; // reply_kind label: 'real' | 'fallback' (absent = 'real')
 }
 
 export function userE2eKey(replyWamid: string): string {
@@ -33,4 +34,11 @@ export function userE2eKey(replyWamid: string): string {
 
 export function sentMarkerKey(originalWamid: string): string {
   return `{wabot:${env}}:sent:wamid:${originalWamid}`;
+}
+
+// NX-claimed by the first sendMessage call of a turn: user_e2e is
+// time-to-FIRST-response, so later sends for the same inbound wamid
+// (multi-part replies, post-timeout retries) must not create mappings.
+export function userE2eTurnKey(originalWamid: string): string {
+  return `{wabot:${env}}:user-e2e-turn:wamid:${originalWamid}`;
 }
