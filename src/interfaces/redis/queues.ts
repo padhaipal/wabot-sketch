@@ -38,6 +38,13 @@ export function createQueue(
     defaultJobOptions: {
       attempts: 3,
       backoff: { type: 'exponential', delay: 1_000 },
+      // Without these, BullMQ retains every completed/failed job in Redis
+      // forever. By 2026-07-13 wabot's Redis held millions of finished
+      // load-test jobs (~4 GB RAM + constant AOF-rewrite CPU, the highest
+      // CPU of any Railway service). Keep a short completed tail for
+      // debugging and a bounded failed set for post-mortems.
+      removeOnComplete: { age: 3_600, count: 1_000 },
+      removeOnFail: { age: 7 * 24 * 3_600, count: 5_000 },
       ...defaultJobOptions,
     },
   });
