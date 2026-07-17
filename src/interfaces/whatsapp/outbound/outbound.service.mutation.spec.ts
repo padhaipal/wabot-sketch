@@ -74,6 +74,9 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockGetBaggage.mockReturnValue(undefined);
   mockConnGet.mockResolvedValue(null);
+  // 'OK' satisfies the user_e2e turn claim's NX write; plain marker/mapping
+  // writes ignore the return value.
+  mockConnSet.mockResolvedValue('OK');
   mockStatusQueueAdd.mockResolvedValue(undefined);
 });
 afterEach(() => {
@@ -841,6 +844,117 @@ describe('sendMessage — user_e2e mapping + sent marker', () => {
     } finally {
       delete process.env.LOAD_TEST_PHONE_PREFIX;
     }
+  });
+});
+
+describe('sendMessage — first-reply-per-turn guard + reply_kind', () => {
+  const TS = '1700000000000';
+
+  function okFetch(replyId: string): jest.Mock {
+    return jest.fn().mockResolvedValue(
+      mockResponse({
+        status: 200,
+        json: { messages: [{ id: replyId }] },
+      }),
+    );
+  }
+
+  beforeEach(() => {
+    mockGetBaggage.mockReturnValue(
+      baggageWith({ 'wabot.msg.ts_ms': TS, 'padhaipal.load_test': 'false' }),
+    );
+    mockConnEval.mockResolvedValue(25_000);
+    mockConnDel.mockResolvedValue(1);
+  });
+
+  it('claims the turn with SET NX EX before mapping', async () => {
+    global.fetch = okFetch('wamid.R1') as never;
+    await sendMessage({
+      user_id: '919999990001',
+      wamid: 'wamid.ORIG',
+      consecutive: false,
+      media: [{ type: 'text', body: 'hi' }],
+    });
+    expect(mockConnSet).toHaveBeenCalledWith(
+      expect.stringContaining('user-e2e-turn:wamid:wamid.ORIG'),
+      '1',
+      'EX',
+      900,
+      'NX',
+    );
+  });
+
+  it('does NOT map when another send already claimed the turn (NX returns null)', async () => {
+    mockConnSet.mockImplementation((key: string) =>
+      Promise.resolve(String(key).includes('user-e2e-turn:') ? null : 'OK'),
+    );
+    global.fetch = okFetch('wamid.R2') as never;
+    await sendMessage({
+      user_id: '919999990001',
+      wamid: 'wamid.ORIG',
+      consecutive: true,
+      media: [{ type: 'text', body: 'part 2' }],
+    });
+    const mappingWrites = mockConnSet.mock.calls.filter((c) =>
+      String(c[0]).includes('user-e2e:wamid:'),
+    );
+    expect(mappingWrites).toHaveLength(0);
+  });
+
+  it('does NOT map when the turn claim errors (skip beats double-count)', async () => {
+    mockConnSet.mockImplementation((key: string) =>
+      String(key).includes('user-e2e-turn:')
+        ? Promise.reject(new Error('redis down'))
+        : Promise.resolve('OK'),
+    );
+    global.fetch = okFetch('wamid.R3') as never;
+    await sendMessage({
+      user_id: '919999990001',
+      wamid: 'wamid.ORIG',
+      consecutive: false,
+      media: [{ type: 'text', body: 'hi' }],
+    });
+    const mappingWrites = mockConnSet.mock.calls.filter((c) =>
+      String(c[0]).includes('user-e2e:wamid:'),
+    );
+    expect(mappingWrites).toHaveLength(0);
+  });
+
+  it("reply_kind: 'fallback' lands in the mapping payload as rk", async () => {
+    global.fetch = okFetch('wamid.R4') as never;
+    await sendMessage({
+      user_id: '919999990001',
+      wamid: 'wamid.ORIG',
+      consecutive: false,
+      media: [{ type: 'audio', url: 'https://x/fallback.mp3' }],
+      reply_kind: 'fallback',
+    });
+    const mappingWrites = mockConnSet.mock.calls.filter((c) =>
+      String(c[0]).includes('user-e2e:wamid:'),
+    );
+    expect(mappingWrites).toHaveLength(1);
+    expect(JSON.parse(mappingWrites[0][1] as string)).toEqual({
+      ts: 1_700_000_000_000,
+      lt: 'false',
+      rk: 'fallback',
+    });
+  });
+
+  it('real replies store no rk field (decoded as real downstream)', async () => {
+    global.fetch = okFetch('wamid.R5') as never;
+    await sendMessage({
+      user_id: '919999990001',
+      wamid: 'wamid.ORIG',
+      consecutive: false,
+      media: [{ type: 'text', body: 'hi' }],
+    });
+    const mappingWrites = mockConnSet.mock.calls.filter((c) =>
+      String(c[0]).includes('user-e2e:wamid:'),
+    );
+    expect(JSON.parse(mappingWrites[0][1] as string)).toEqual({
+      ts: 1_700_000_000_000,
+      lt: 'false',
+    });
   });
 });
 

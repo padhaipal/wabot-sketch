@@ -108,6 +108,7 @@ async function sendFallback(opts: {
         wamid: opts.wamid,
         consecutive: false,
         media,
+        reply_kind: 'fallback',
       }),
     );
     if (result.body.delivered) {
@@ -380,6 +381,7 @@ export const processMessageTimeout: Processor = async (
         wamid,
         consecutive: false,
         media: buildFallbackMedia(),
+        reply_kind: 'fallback',
       }),
     );
 

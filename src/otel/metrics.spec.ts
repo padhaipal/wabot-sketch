@@ -207,10 +207,11 @@ describe('buildUserE2eAttributes', () => {
     ) => Record<string, string>;
   };
 
-  it('builds outcome + load_test without test_phase when absent', () => {
+  it('builds outcome + load_test (+ default reply_kind=real) without test_phase when absent', () => {
     expect(buildUserE2eAttributes('delivered', 'false')).toEqual({
       outcome: 'delivered',
       load_test: 'false',
+      reply_kind: 'real',
     });
   });
 
@@ -219,6 +220,7 @@ describe('buildUserE2eAttributes', () => {
       outcome: 'late',
       load_test: 'true',
       test_phase: 'phase_2',
+      reply_kind: 'real',
     });
   });
 
@@ -226,7 +228,20 @@ describe('buildUserE2eAttributes', () => {
     expect(buildUserE2eAttributes('delivered', 'true', '')).toEqual({
       outcome: 'delivered',
       load_test: 'true',
+      reply_kind: 'real',
     });
+  });
+
+  it("marks reply_kind=fallback only for the literal 'fallback'", () => {
+    expect(
+      buildUserE2eAttributes('delivered', 'false', undefined, 'fallback')
+        .reply_kind,
+    ).toBe('fallback');
+    // Anything else (absent, unknown junk from an old mapping) is 'real'.
+    expect(
+      buildUserE2eAttributes('delivered', 'false', undefined, 'weird')
+        .reply_kind,
+    ).toBe('real');
   });
 
   it('does not read baggage at all', () => {
