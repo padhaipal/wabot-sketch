@@ -456,3 +456,87 @@ describe('PpInboundController.uploadMedia', () => {
     expect(res.status).not.toHaveBeenCalled();
   });
 });
+
+// ─── flow media items (2026-07) ──────────────────────────────────────────────
+
+import { plainToInstance as buildFlow } from 'class-transformer';
+import { validateSync as validateFlow } from 'class-validator';
+import { OutboundMediaItemDto } from './inbound.dto';
+
+describe('OutboundMediaItemDto — flow items', () => {
+  const flowItem = {
+    type: 'flow',
+    flow: {
+      flow_id: 'flow-1',
+      body: 'सवाल',
+      cta: 'जवाब दें',
+      screen: 'COMPREHENSION',
+      data: {
+        question_text: 'कौन?',
+        options: [
+          { id: 'a', title: 'A', description: 'पहला' },
+          { id: 'b', title: 'B', description: 'दूसरा' },
+        ],
+      },
+    },
+  };
+
+  it('accepts a well-formed flow item (no url required)', () => {
+    expect(
+      validateFlow(buildFlow(OutboundMediaItemDto, flowItem)),
+    ).toHaveLength(0);
+  });
+
+  it('rejects a flow item without the flow payload', () => {
+    const errs = validateFlow(
+      buildFlow(OutboundMediaItemDto, { type: 'flow' }),
+    );
+    expect(errs.some((e) => e.property === 'flow')).toBe(true);
+  });
+
+  it('rejects option descriptions over the 300-char Meta cap', () => {
+    const bad = {
+      ...flowItem,
+      flow: {
+        ...flowItem.flow,
+        data: {
+          question_text: 'कौन?',
+          options: [
+            { id: 'a', title: 'A', description: 'द'.repeat(301) },
+            { id: 'b', title: 'B', description: 'ठीक' },
+          ],
+        },
+      },
+    };
+    expect(
+      validateFlow(buildFlow(OutboundMediaItemDto, bad)).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it('rejects more than 4 options', () => {
+    const bad = {
+      ...flowItem,
+      flow: {
+        ...flowItem.flow,
+        data: {
+          question_text: 'कौन?',
+          options: ['a', 'b', 'c', 'd', 'e'].map((id) => ({
+            id,
+            title: id.toUpperCase(),
+            description: 'x',
+          })),
+        },
+      },
+    };
+    expect(
+      validateFlow(buildFlow(OutboundMediaItemDto, bad)).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it('still requires url for non-text non-flow media', () => {
+    const errs = validateFlow(
+      buildFlow(OutboundMediaItemDto, { type: 'audio' }),
+    );
+    expect(errs.some((e) => e.property === 'url')).toBe(true);
+  });
+});

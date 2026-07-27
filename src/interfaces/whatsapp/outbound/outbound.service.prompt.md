@@ -71,3 +71,13 @@ Reference: https://developers.facebook.com/docs/whatsapp/cloud-api/reference/med
   The returned id is a WhatsApp media ID valid for 30 days. It can be used in sendMessage via { id: <value> }.
 * On 4XX: log ERROR and throw.
 * On 5XX: log WARN and throw.
+
+## 2026-07: flow messages
+
+- `buildWaPayload` gained a `flow` branch — the one case where item type ≠
+  wire type: a `flow` item becomes `type: 'interactive'` with
+  `interactive.type='flow'`, `flow_message_version '3'`, `flow_action
+  'navigate'` and the dynamic content in `flow_action_payload.data` (the
+  asset is published once via scripts/publish-flow.ts; no data endpoint).
+- Meta component caps re-enforced by truncation at send time: body 1024, cta
+  30, question_text 4096, option title 30, option description 300.

@@ -1084,3 +1084,104 @@ describe('oversize text body cap', () => {
     expect(mockOversizeAdd).not.toHaveBeenCalled();
   });
 });
+
+// ---------------- flow messages (2026-07) --------------------------------
+
+describe('sendMessage — flow payload shape', () => {
+  beforeEach(() => {
+    jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+  });
+  afterEach(() => jest.restoreAllMocks());
+
+  const flowItem = {
+    type: 'flow' as const,
+    flow: {
+      flow_id: 'flow-asset-9',
+      body: 'सवाल का जवाब दो',
+      cta: 'जवाब दें',
+      screen: 'COMPREHENSION',
+      data: {
+        question_text: 'कहानी में कौन था?',
+        options: [
+          { id: 'opt-1', title: 'A', description: 'पहला उत्तर' },
+          { id: 'opt-2', title: 'B', description: 'दूसरा उत्तर' },
+        ],
+      },
+    },
+  };
+
+  async function sentBody(item: unknown): Promise<Record<string, unknown>> {
+    const fetchSpy = jest.fn().mockResolvedValue(mockResponse({ status: 200 }));
+    global.fetch = fetchSpy as never;
+    await sendMessage({
+      user_id: '919999990001',
+      wamid: 'wamid.1',
+      consecutive: true,
+      media: [item as any],
+    });
+    return JSON.parse(
+      (fetchSpy.mock.calls[0][1] as RequestInit).body as string,
+    ) as Record<string, unknown>;
+  }
+
+  it('rides the interactive envelope with navigate + published flow id', async () => {
+    const body = await sentBody(flowItem);
+    expect(body.type).toBe('interactive'); // item type ≠ wire type — the one exception
+    const interactive = body.interactive as {
+      type: string;
+      body: { text: string };
+      action: {
+        name: string;
+        parameters: {
+          flow_message_version: string;
+          flow_id: string;
+          flow_cta: string;
+          flow_action: string;
+          flow_action_payload: { screen: string; data: unknown };
+        };
+      };
+    };
+    expect(interactive.type).toBe('flow');
+    expect(interactive.body.text).toBe('सवाल का जवाब दो');
+    expect(interactive.action.name).toBe('flow');
+    expect(interactive.action.parameters.flow_message_version).toBe('3');
+    expect(interactive.action.parameters.flow_id).toBe('flow-asset-9');
+    expect(interactive.action.parameters.flow_cta).toBe('जवाब दें');
+    expect(interactive.action.parameters.flow_action).toBe('navigate');
+    expect(interactive.action.parameters.flow_action_payload.screen).toBe(
+      'COMPREHENSION',
+    );
+    expect(interactive.action.parameters.flow_action_payload.data).toEqual(
+      flowItem.flow.data,
+    );
+  });
+
+  it('truncates over-limit strings to the Meta component caps at send time', async () => {
+    const oversize = {
+      ...flowItem,
+      flow: {
+        ...flowItem.flow,
+        cta: 'x'.repeat(60),
+        data: {
+          question_text: 'क'.repeat(5000),
+          options: [
+            {
+              id: 'opt-1',
+              title: 'T'.repeat(40),
+              description: 'द'.repeat(400),
+            },
+            { id: 'opt-2', title: 'B', description: 'ठीक' },
+          ],
+        },
+      },
+    };
+    const body = await sentBody(oversize);
+    const parameters = (body.interactive as any).action.parameters;
+    expect(parameters.flow_cta.length).toBe(30);
+    const data = parameters.flow_action_payload.data;
+    expect(data.question_text.length).toBe(4096);
+    expect(data.options[0].title.length).toBe(30);
+    expect(data.options[0].description.length).toBe(300);
+  });
+});

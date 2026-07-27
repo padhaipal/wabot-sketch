@@ -145,3 +145,10 @@ export class UploadMediaResultDto {
 // --- downloadMedia --- //
 // downloadMedia does not use a JSON request body (it's a GET with Authorization header).
 // Return shape is { stream: NodeJS.ReadableStream, content_type: string } — not modeled as a class-validator DTO since it contains a stream.
+
+## 2026-07 additions
+
+- `WaSendMessageRequestDto.type` now includes 'sticker' (fixing the
+  documented drift with the runtime builder) and 'interactive'.
+- New wire classes for flow sends: `WaInteractiveDto`, `WaInteractiveActionDto`,
+  `WaFlowParametersDto`, `WaFlowActionPayloadDto`.

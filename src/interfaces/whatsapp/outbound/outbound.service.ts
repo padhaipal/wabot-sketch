@@ -220,6 +220,16 @@ function dropOversizeTextItems(
   });
 }
 
+// Meta caps for the components our published comprehension flow renders
+// (developers.facebook.com/docs/whatsapp/flows/reference/components), applied
+// once more at send time — the DTO validates, this truncates, so a malformed
+// internal caller degrades instead of 400ing at Meta.
+const FLOW_BODY_MAX_CHARS = 1024;
+const FLOW_CTA_MAX_CHARS = 30;
+const FLOW_QUESTION_MAX_CHARS = 4096;
+const FLOW_OPTION_TITLE_MAX_CHARS = 30;
+const FLOW_OPTION_DESCRIPTION_MAX_CHARS = 300;
+
 function buildWaPayload(opts: {
   user_id: string;
   item: OutboundMediaItemDto;
@@ -233,6 +243,48 @@ function buildWaPayload(opts: {
 
   if (opts.item.type === 'text') {
     return { ...base, text: { body: opts.item.body } };
+  }
+
+  if (opts.item.type === 'flow') {
+    // The only case where item type ≠ wire type: flows ride the interactive
+    // message envelope. The asset is published once (scripts/publish-flow.ts)
+    // and receives all dynamic content via flow_action_payload.data — a
+    // single-screen navigate flow needs no data endpoint.
+    const flow = opts.item.flow!;
+    return {
+      ...base,
+      type: 'interactive',
+      interactive: {
+        type: 'flow',
+        body: { text: flow.body.slice(0, FLOW_BODY_MAX_CHARS) },
+        action: {
+          name: 'flow',
+          parameters: {
+            flow_message_version: '3',
+            flow_id: flow.flow_id,
+            flow_cta: flow.cta.slice(0, FLOW_CTA_MAX_CHARS),
+            flow_action: 'navigate',
+            flow_action_payload: {
+              screen: flow.screen,
+              data: {
+                question_text: flow.data.question_text.slice(
+                  0,
+                  FLOW_QUESTION_MAX_CHARS,
+                ),
+                options: flow.data.options.map((option) => ({
+                  id: option.id,
+                  title: option.title.slice(0, FLOW_OPTION_TITLE_MAX_CHARS),
+                  description: option.description.slice(
+                    0,
+                    FLOW_OPTION_DESCRIPTION_MAX_CHARS,
+                  ),
+                })),
+              },
+            },
+          },
+        },
+      },
+    };
   }
 
   const mediaObject = opts.item.url?.startsWith('http')

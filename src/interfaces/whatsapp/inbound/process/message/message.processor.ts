@@ -277,12 +277,19 @@ export const processMessage: Processor = async (job: Job): Promise<void> => {
           );
         });
 
-      const timeoutPromise = enqueueTimeout({
-        userId,
-        wamid,
-        messageTimestamp: message.timestamp,
-        carrier,
-      });
+      // No timeout fallback for interactive (flow-tap) messages: pp-sketch
+      // legitimately answers some taps with silence (stale/duplicate flow
+      // submissions), and a fallback video 20s after a button tap would read
+      // as noise. Voice/text messages keep the fallback safety net.
+      const timeoutPromise =
+        message.type === 'interactive'
+          ? Promise.resolve()
+          : enqueueTimeout({
+              userId,
+              wamid,
+              messageTimestamp: message.timestamp,
+              carrier,
+            });
 
       const [, timeoutResult] = await Promise.allSettled([
         readReceiptPromise,

@@ -67,3 +67,11 @@ export class DownloadMediaDto {
 export class UploadMediaResponseDto {
   wa_media_url!: string;                   // WhatsApp media ID — use in OutboundMediaItemDto.url to reference the preloaded media
 }
+
+## 2026-07 additions
+
+`OutboundMediaItemDto.type` gained 'flow'. Flow items carry no `url`; instead
+`flow: OutboundFlowDto {flow_id, body (≤1024), cta (≤30), screen, data
+{question_text (≤4096), options 2-4 × {id, title ≤30, description ≤300}}}` —
+mirrors pp-sketch's OutboundFlowData. Caps follow Meta's Flow component
+reference and are enforced again by truncation in outbound.service.ts.
