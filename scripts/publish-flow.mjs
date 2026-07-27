@@ -107,7 +107,9 @@ const FLOW_JSON = {
 
 const graph = (path) => `https://graph.facebook.com/${GRAPH_VERSION}/${path}`;
 
-async function graphFetch(path, init) {
+// `label` is a static step name for logs — the path itself contains
+// env-derived ids (WABA id) and must never be logged (js/clear-text-logging).
+async function graphFetch(label, path, init) {
   const response = await fetch(graph(path), {
     ...init,
     headers: {
@@ -117,7 +119,7 @@ async function graphFetch(path, init) {
   });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
-    console.error(`${path} → HTTP ${response.status}`);
+    console.error(`${label} → HTTP ${response.status}`);
     console.error(JSON.stringify(body, null, 2));
     process.exit(1);
   }
@@ -125,13 +127,13 @@ async function graphFetch(path, init) {
 }
 
 // 1. Create the draft flow.
-const created = await graphFetch(`${WABA_ID}/flows`, {
+const created = await graphFetch('create-flow', `${WABA_ID}/flows`, {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({ name: FLOW_NAME, categories: ['OTHER'] }),
 });
 const flowId = created.id;
-console.log(`Created draft flow ${flowId} (${FLOW_NAME})`);
+console.log(`Created draft flow ${flowId}`);
 
 // 2. Upload the flow JSON asset.
 const form = new FormData();
@@ -144,7 +146,7 @@ form.append(
 );
 form.append('name', 'flow.json');
 form.append('asset_type', 'FLOW_JSON');
-const uploaded = await graphFetch(`${flowId}/assets`, {
+const uploaded = await graphFetch('upload-asset', `${flowId}/assets`, {
   method: 'POST',
   body: form,
 });
@@ -158,7 +160,7 @@ if (validationErrors.length > 0) {
 console.log('Flow JSON uploaded, no validation errors');
 
 // 3. Publish (irreversible — published flows are immutable).
-await graphFetch(`${flowId}/publish`, { method: 'POST' });
+await graphFetch('publish', `${flowId}/publish`, { method: 'POST' });
 console.log(`Published flow ${flowId}`);
 console.log('');
 console.log('Next step: set on the pp-sketch deployment:');
