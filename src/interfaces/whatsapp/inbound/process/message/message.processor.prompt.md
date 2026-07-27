@@ -42,3 +42,10 @@ Observability
 * In processMessageTimeout, rebuild ctx as `trace.setSpan(parentCtx, span)` where parentCtx comes from `propagation.extract` (which already surfaces the baggage that processMessage injected into the timeout job carrier) and wrap the sendMessage call in `context.with(ctx, ...)` for the same reason.
 * sendFallback wraps `waOutbound.sendMessage` in `context.with(opts.ctx, ...)` so baggage reaches sendMessage.
 * Set span error status and record exception on failures.
+
+## 2026-07: interactive messages
+
+Interactive (flow-tap) messages forward to PP like any other message but do
+NOT enqueue the 20s process-message-timeout fallback: pp-sketch answers
+stale/duplicate flow submissions with silence, and a fallback video after a
+button tap would read as noise.

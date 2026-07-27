@@ -48,6 +48,56 @@ export class WaMediaObjectDto {
   id?: string;
 }
 
+// interactive/flow action parameters (Cloud API "Sending a Flow"). The flow
+// asset is published once; flow_action_payload carries the entry screen and
+// its dynamic data.
+export class WaFlowActionPayloadDto {
+  @IsString()
+  screen!: string;
+
+  data?: Record<string, unknown>;
+}
+
+export class WaFlowParametersDto {
+  @IsIn(['3'])
+  flow_message_version!: '3';
+
+  @IsString()
+  flow_id!: string;
+
+  @IsString()
+  flow_cta!: string;
+
+  @IsIn(['navigate'])
+  flow_action!: 'navigate';
+
+  @ValidateNested()
+  @Type(() => WaFlowActionPayloadDto)
+  flow_action_payload!: WaFlowActionPayloadDto;
+}
+
+export class WaInteractiveActionDto {
+  @IsIn(['flow'])
+  name!: 'flow';
+
+  @ValidateNested()
+  @Type(() => WaFlowParametersDto)
+  parameters!: WaFlowParametersDto;
+}
+
+export class WaInteractiveDto {
+  @IsIn(['flow'])
+  type!: 'flow';
+
+  @ValidateNested()
+  @Type(() => WaTextBodyDto)
+  body!: WaTextBodyDto;
+
+  @ValidateNested()
+  @Type(() => WaInteractiveActionDto)
+  action!: WaInteractiveActionDto;
+}
+
 export class WaSendMessageRequestDto {
   @IsString()
   messaging_product!: 'whatsapp';
@@ -58,8 +108,11 @@ export class WaSendMessageRequestDto {
   @IsString()
   to!: string;
 
-  @IsIn(['text', 'audio', 'video', 'image'])
-  type!: 'text' | 'audio' | 'video' | 'image';
+  // 'interactive' is the wire type for flow items (the one place item type ≠
+  // WA type). 'sticker' was previously missing from this descriptive DTO —
+  // the runtime builder always supported it.
+  @IsIn(['text', 'audio', 'video', 'image', 'sticker', 'interactive'])
+  type!: 'text' | 'audio' | 'video' | 'image' | 'sticker' | 'interactive';
 
   @IsOptional()
   @ValidateNested()
@@ -80,6 +133,16 @@ export class WaSendMessageRequestDto {
   @ValidateNested()
   @Type(() => WaMediaObjectDto)
   image?: WaMediaObjectDto;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => WaMediaObjectDto)
+  sticker?: WaMediaObjectDto;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => WaInteractiveDto)
+  interactive?: WaInteractiveDto;
 }
 
 export class WaSendMessageContactDto {

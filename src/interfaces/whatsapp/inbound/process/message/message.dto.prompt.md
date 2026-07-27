@@ -103,3 +103,11 @@ export class MessageJobDto {
   @Type(() => MessageDto)
   message!: MessageDto;
 }
+
+## 2026-07 additions
+
+`MessageDto` accepts `type: 'interactive'` with an `InteractiveDto` payload
+(`nfm_reply {name, body, response_json}` — a WhatsApp Flow completion).
+Previously these webhooks failed validation and were silently dropped in
+parse.processor. `response_json` is untrusted user input, forwarded verbatim
+to pp-sketch which validates it.

@@ -109,3 +109,9 @@ export class PpMessageJobDto {
   @IsBoolean()
   consecutive?: boolean;
 }
+
+## 2026-07 additions
+
+`PpMessageDto` mirrors the interactive/nfm_reply support (`PpInteractiveDto`,
+`PpNfmReplyDto`) so flow taps forward to pp-sketch. Keep in sync with
+pp-sketch's wabot-inbound.dto.ts.

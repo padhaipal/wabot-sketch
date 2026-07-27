@@ -130,7 +130,7 @@ describe('WaSendMessageRequestDto', () => {
 
   it('rejects an unknown type', () => {
     const errs = validateSync(
-      build(WaSendMessageRequestDto, { ...base, type: 'sticker' }),
+      build(WaSendMessageRequestDto, { ...base, type: 'contacts' }),
     );
     expect(errs.some((e) => e.property === 'type')).toBe(true);
   });

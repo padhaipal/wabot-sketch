@@ -152,3 +152,51 @@ describe('PpMessageJobDto envelope', () => {
     expect(errs.some((e) => e.property === 'message')).toBe(true);
   });
 });
+
+// ─── interactive / nfm_reply forwarding (2026-07) ────────────────────────────
+
+import { PpInteractiveDto, PpNfmReplyDto } from './outbound.dto';
+
+describe('PpMessageDto — interactive (flow tap) messages', () => {
+  const interactiveMessage = {
+    from: '+911234567890',
+    id: 'wamid.tap',
+    timestamp: '1750000000',
+    type: 'interactive',
+    interactive: {
+      type: 'nfm_reply',
+      nfm_reply: {
+        name: 'flow',
+        body: 'Sent',
+        response_json: '{"answer_id":"opt-1"}',
+      },
+    },
+  };
+
+  it('accepts a well-formed nfm_reply message', () => {
+    expect(validateSync(build(PpMessageDto, interactiveMessage))).toHaveLength(
+      0,
+    );
+  });
+
+  it('rejects type interactive without the interactive payload', () => {
+    const errs = validateSync(
+      build(PpMessageDto, { ...interactiveMessage, interactive: undefined }),
+    );
+    expect(errs.length).toBeGreaterThan(0);
+  });
+
+  it('rejects an nfm_reply missing response_json', () => {
+    const errs = validateSync(
+      build(PpNfmReplyDto, { name: 'flow', body: 'Sent' }),
+    );
+    expect(errs.some((e) => e.property === 'response_json')).toBe(true);
+  });
+
+  it('accepts other interactive subtypes without an nfm_reply payload', () => {
+    // e.g. a button_reply we don't handle yet — forwarding stays permissive.
+    expect(
+      validateSync(build(PpInteractiveDto, { type: 'button_reply' })),
+    ).toHaveLength(0);
+  });
+});

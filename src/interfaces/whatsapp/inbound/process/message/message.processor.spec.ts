@@ -648,3 +648,56 @@ describe('processMessage — padhaipal.load_test baggage entry', () => {
     });
   });
 });
+
+// ─── interactive (flow tap) messages skip the timeout fallback (2026-07) ─────
+
+describe('processMessage — interactive messages', () => {
+  beforeEach(() => {
+    jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+    jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    mockConnSet.mockResolvedValue('OK');
+    mockConnEval.mockResolvedValue(0);
+    mockTimeoutAdd.mockResolvedValue({ id: 'timeout-1' });
+    mockPpSendMessage.mockResolvedValue(200);
+  });
+  afterEach(() => jest.restoreAllMocks());
+
+  const interactiveJobData = {
+    otel: { carrier: { traceparent: 'tp' } },
+    message: {
+      from: '919999990001',
+      id: 'wamid.tap1',
+      timestamp: String(Math.floor(Date.now() / 1000)),
+      type: 'interactive',
+      interactive: {
+        type: 'nfm_reply',
+        nfm_reply: {
+          name: 'flow',
+          body: 'Sent',
+          response_json: '{"answer_id":"opt-1"}',
+        },
+      },
+    },
+  };
+
+  it('forwards the tap to PP but never enqueues the 20s timeout fallback', async () => {
+    await processMessage(makeJob(interactiveJobData as never));
+    expect(mockPpSendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: expect.objectContaining({
+          type: 'interactive',
+          interactive: expect.objectContaining({ type: 'nfm_reply' }),
+        }),
+      }),
+    );
+    // A silent PP response to a stale tap must not turn into a fallback
+    // video 20s later.
+    expect(mockTimeoutAdd).not.toHaveBeenCalled();
+  });
+
+  it('keeps the timeout fallback for ordinary messages (regression guard)', async () => {
+    await processMessage(makeJob(validJobData));
+    expect(mockTimeoutAdd).toHaveBeenCalled();
+  });
+});
