@@ -129,14 +129,41 @@ async function graphFetch(label, path, init) {
   return body;
 }
 
-// 1. Create the draft flow.
-const created = await graphFetch('create-flow', `${WABA_ID}/flows`, {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ name: FLOW_NAME, categories: ['OTHER'] }),
-});
-const flowId = created.id;
-console.log(`Created draft flow ${flowId}`);
+// 1. Find-or-create the draft flow. Flow names are unique per WABA, so a
+// failed earlier run leaves a stray draft that would 400 the create with
+// "Flow name is not unique" — reuse it instead (uploading the asset again
+// replaces the draft's flow JSON). An already-PUBLISHED flow of this name
+// is immutable: just print its id and exit (idempotent success).
+const listing = await graphFetch(
+  'list-flows',
+  `${WABA_ID}/flows?fields=id,name,status&limit=200`,
+  { method: 'GET' },
+);
+const existing = (listing.data ?? []).find((f) => f.name === FLOW_NAME);
+let flowId;
+if (existing && existing.status === 'PUBLISHED') {
+  console.log(`Flow "${FLOW_NAME}" already published as ${existing.id}`);
+  console.log('');
+  console.log('Next step: set on the pp-sketch deployment:');
+  console.log(`  WHATSAPP_COMPREHENSION_FLOW_ID=${existing.id}`);
+  process.exit(0);
+} else if (existing && existing.status === 'DRAFT') {
+  flowId = existing.id;
+  console.log(`Reusing existing draft flow ${flowId}`);
+} else if (existing) {
+  console.error(
+    `Flow "${FLOW_NAME}" exists with status ${existing.status} — delete it in WhatsApp Manager or pick a new FLOW_NAME.`,
+  );
+  process.exit(1);
+} else {
+  const created = await graphFetch('create-flow', `${WABA_ID}/flows`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: FLOW_NAME, categories: ['OTHER'] }),
+  });
+  flowId = created.id;
+  console.log(`Created draft flow ${flowId}`);
+}
 
 // 2. Upload the flow JSON asset.
 const form = new FormData();
