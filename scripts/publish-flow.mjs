@@ -42,7 +42,10 @@ if (!ACCESS_TOKEN || !WABA_ID) {
 }
 
 const FLOW_JSON = {
-  version: '5.0',
+  // Meta freezes Flow JSON versions ~12 months after release ('5.0' now
+  // rejected with INVALID_FLOW_JSON_VERSION). 7.3 = current recommended,
+  // 2026-08; no breaking changes for the components used here.
+  version: '7.3',
   screens: [
     {
       id: 'COMPREHENSION',
