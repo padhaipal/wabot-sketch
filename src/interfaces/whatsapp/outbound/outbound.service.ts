@@ -65,6 +65,19 @@ async function loadTestDelay(): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, ms));
 }
 
+// Spacing between the items of one outbound bundle — and after the last one —
+// so multi-media turns land as distinct, ordered messages rather than a
+// burst. Applied after every SUCCESSFUL item send in sendMessage and
+// sendNotification (error paths return immediately); load-test traffic gets
+// it too so measured e2e matches production pacing. Exported for specs.
+export const INTER_ITEM_DELAY_MS = 500;
+
+async function interItemDelay(): Promise<void> {
+  await new Promise<void>((resolve) =>
+    setTimeout(resolve, INTER_ITEM_DELAY_MS),
+  );
+}
+
 function stubMediaStream(): {
   stream: NodeJS.ReadableStream;
   content_type: string;
@@ -736,6 +749,8 @@ export async function sendMessage(opts: {
         }
       }
     }
+
+    await interItemDelay();
   }
 
   // All sends succeeded. Release the per-user consec lock.
@@ -830,6 +845,8 @@ export async function sendNotification(opts: {
         error_code: errorCode,
       };
     }
+
+    await interItemDelay();
   }
 
   return { status: 200, delivered: true };
