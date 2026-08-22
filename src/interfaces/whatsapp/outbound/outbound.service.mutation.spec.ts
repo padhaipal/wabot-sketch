@@ -42,6 +42,7 @@ jest.mock('../../../otel/metrics', () => ({
 import { Logger } from '@nestjs/common';
 import {
   CLAIM_LUA,
+  INTER_ITEM_DELAY_MS,
   sendReadAndTypingIndicator,
   sendMessage,
   sendNotification,
@@ -152,9 +153,11 @@ describe('sendSingleItem retry loop (5XX → eventual 2XX)', () => {
       consecutive: true,
       media: [{ type: 'text', body: 'hi' }],
     });
-    // Advance through backoff: 500ms after 1st failure, 1000ms after 2nd
+    // Advance through backoff: 500ms after 1st failure, 1000ms after 2nd,
+    // then the trailing inter-item delay after the successful send.
     await jest.advanceTimersByTimeAsync(500);
     await jest.advanceTimersByTimeAsync(1000);
+    await jest.advanceTimersByTimeAsync(INTER_ITEM_DELAY_MS);
     const out = await p;
     expect(out.body.delivered).toBe(true);
     expect(fetchSpy).toHaveBeenCalledTimes(3);
@@ -1044,5 +1047,71 @@ describe('sendMessage — claim-miss gating (timeout race vs real expiry)', () =
       expect.any(Number),
       expect.objectContaining({ outcome: 'inflight-expired' }),
     );
+  });
+});
+
+describe('inter-item send delay', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+    jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+    jest.restoreAllMocks();
+  });
+
+  it('sendMessage sleeps INTER_ITEM_DELAY_MS after every item, including the last', async () => {
+    mockConnEval.mockResolvedValue(25_000);
+    mockConnSet.mockResolvedValue('OK');
+    mockConnDel.mockResolvedValue(1);
+    const fetchSpy = jest.fn().mockResolvedValue(mockResponse({ status: 200 }));
+    global.fetch = fetchSpy as never;
+
+    let settled = false;
+    const p = sendMessage({
+      user_id: '919999990001',
+      wamid: 'wamid.delay',
+      consecutive: false,
+      media: [
+        { type: 'text', body: 'a' },
+        { type: 'text', body: 'b' },
+      ],
+    });
+    void p.then(() => {
+      settled = true;
+    });
+
+    // First item sent, its trailing delay pending — not settled.
+    await jest.advanceTimersByTimeAsync(0);
+    expect(settled).toBe(false);
+    // After one delay the second item sends; its own trailing delay pends.
+    await jest.advanceTimersByTimeAsync(INTER_ITEM_DELAY_MS);
+    expect(settled).toBe(false);
+    // After the second (trailing) delay the call resolves.
+    await jest.advanceTimersByTimeAsync(INTER_ITEM_DELAY_MS);
+    const out = await p;
+    expect(out.body.delivered).toBe(true);
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('sendNotification sleeps after each item too', async () => {
+    const fetchSpy = jest.fn().mockResolvedValue(mockResponse({ status: 200 }));
+    global.fetch = fetchSpy as never;
+
+    let settled = false;
+    const p = sendNotification({
+      user_id: '919999990001',
+      media: [{ type: 'text', body: 'a' }],
+    });
+    void p.then(() => {
+      settled = true;
+    });
+
+    await jest.advanceTimersByTimeAsync(0);
+    expect(settled).toBe(false);
+    await jest.advanceTimersByTimeAsync(INTER_ITEM_DELAY_MS);
+    const out = await p;
+    expect(out.delivered).toBe(true);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 });
