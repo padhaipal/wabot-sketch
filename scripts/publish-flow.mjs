@@ -11,6 +11,14 @@
  * Optional:
  *   GRAPH_API_VERSION              default v21.0 (matches outbound.service.ts)
  *   FLOW_NAME                      default comprehension-mcq-v1
+ *   FLOW_VARIANT                   mcq (default) | passage — `passage` adds a
+ *                                  TextBody bound to data.passage_text above
+ *                                  the question (level 11+ read-in-flow,
+ *                                  2026-09). Pair with e.g.
+ *                                  FLOW_NAME=comprehension-mcq-passage-v1.
+ *   PUBLISH                        set to 0 to stop after the asset upload
+ *                                  (draft stays editable; prints the preview
+ *                                  URL) — publishing is irreversible.
  *
  * What it does:
  *   1. POST /{WABA}/flows                 → create a draft flow (category OTHER)
@@ -33,6 +41,13 @@ const ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN;
 const WABA_ID = process.env.WHATSAPP_BUSINESS_ACCOUNT_ID;
 const GRAPH_VERSION = process.env.GRAPH_API_VERSION ?? 'v21.0';
 const FLOW_NAME = process.env.FLOW_NAME ?? 'comprehension-mcq-v1';
+const FLOW_VARIANT = process.env.FLOW_VARIANT ?? 'mcq';
+const PUBLISH = process.env.PUBLISH !== '0';
+if (FLOW_VARIANT !== 'mcq' && FLOW_VARIANT !== 'passage') {
+  console.error(`FLOW_VARIANT must be mcq or passage (got ${FLOW_VARIANT})`);
+  process.exit(1);
+}
+const WITH_PASSAGE = FLOW_VARIANT === 'passage';
 
 if (!ACCESS_TOKEN || !WABA_ID) {
   console.error(
@@ -52,6 +67,13 @@ const FLOW_JSON = {
       title: 'सवाल',
       terminal: true,
       data: {
+        // Passage variant: the reading passage rendered above the question.
+        ...(WITH_PASSAGE && {
+          passage_text: {
+            type: 'string',
+            __example__: 'राम के घर एक गाय है। गाय हरी घास खाती है।',
+          },
+        }),
         question_text: {
           type: 'string',
           __example__: 'कहानी में कौन था?',
@@ -79,9 +101,14 @@ const FLOW_JSON = {
             type: 'Form',
             name: 'comprehension_form',
             children: [
+              ...(WITH_PASSAGE
+                ? [{ type: 'TextBody', text: '${data.passage_text}' }]
+                : []),
               {
                 type: 'TextBody',
                 text: '${data.question_text}',
+                // Bold question under the passage (Flow JSON ≥ 5.1).
+                ...(WITH_PASSAGE && { markdown: true }),
               },
               {
                 type: 'RadioButtonsGroup',
@@ -188,6 +215,18 @@ if (validationErrors.length > 0) {
   process.exit(1);
 }
 console.log('Flow JSON uploaded, no validation errors');
+
+if (!PUBLISH) {
+  const preview = await graphFetch(
+    'preview',
+    `${flowId}?fields=preview.invalidate(false)`,
+    { method: 'GET' },
+  );
+  console.log(`Draft ${flowId} left unpublished (PUBLISH=0).`);
+  console.log(`Preview: ${preview.preview?.preview_url ?? '(no preview url returned)'}`);
+  console.log('Re-run without PUBLISH=0 to publish this draft.');
+  process.exit(0);
+}
 
 // 3. Publish (irreversible — published flows are immutable).
 await graphFetch('publish', `${flowId}/publish`, { method: 'POST' });

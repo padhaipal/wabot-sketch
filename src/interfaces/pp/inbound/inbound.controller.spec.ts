@@ -487,6 +487,29 @@ describe('OutboundMediaItemDto — flow items', () => {
     ).toHaveLength(0);
   });
 
+  it('accepts the level-11+ passage variant (optional passage_text ≤ 4096) and rejects an oversize one', () => {
+    const withPassage = {
+      ...flowItem,
+      flow: {
+        ...flowItem.flow,
+        data: { ...flowItem.flow.data, passage_text: 'राम के घर एक गाय है।' },
+      },
+    };
+    expect(
+      validateFlow(buildFlow(OutboundMediaItemDto, withPassage)),
+    ).toHaveLength(0);
+    const oversize = {
+      ...flowItem,
+      flow: {
+        ...flowItem.flow,
+        data: { ...flowItem.flow.data, passage_text: 'क'.repeat(4097) },
+      },
+    };
+    expect(
+      validateFlow(buildFlow(OutboundMediaItemDto, oversize)).length,
+    ).toBeGreaterThan(0);
+  });
+
   it('rejects a flow item without the flow payload', () => {
     const errs = validateFlow(
       buildFlow(OutboundMediaItemDto, { type: 'flow' }),

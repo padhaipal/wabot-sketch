@@ -240,6 +240,7 @@ function dropOversizeTextItems(
 const FLOW_BODY_MAX_CHARS = 1024;
 const FLOW_CTA_MAX_CHARS = 30;
 const FLOW_QUESTION_MAX_CHARS = 4096;
+const FLOW_PASSAGE_MAX_CHARS = 4096;
 const FLOW_OPTION_TITLE_MAX_CHARS = 30;
 const FLOW_OPTION_DESCRIPTION_MAX_CHARS = 300;
 
@@ -280,6 +281,15 @@ function buildWaPayload(opts: {
             flow_action_payload: {
               screen: flow.screen,
               data: {
+                // Passage-in-flow variant only (level 11+): the asset has a
+                // TextBody bound to passage_text; the read-first asset has
+                // none, so the key is omitted rather than sent empty.
+                ...(flow.data.passage_text !== undefined && {
+                  passage_text: flow.data.passage_text.slice(
+                    0,
+                    FLOW_PASSAGE_MAX_CHARS,
+                  ),
+                }),
                 question_text: flow.data.question_text.slice(
                   0,
                   FLOW_QUESTION_MAX_CHARS,

@@ -37,6 +37,14 @@ export class OutboundFlowDataPayloadDto {
   @MaxLength(4096)
   question_text!: string;
 
+  // Level 11+ passage-in-flow variant (2026-09): the reading passage shown
+  // above the question, its own TextBody (Meta cap 4096). Absent for the
+  // read-first flow.
+  @IsOptional()
+  @IsString()
+  @MaxLength(4096)
+  passage_text?: string;
+
   @IsArray()
   @ArrayMinSize(2)
   @ArrayMaxSize(4)
