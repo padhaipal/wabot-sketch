@@ -1157,6 +1157,26 @@ describe('sendMessage — flow payload shape', () => {
     );
   });
 
+  it('passes passage_text through for the passage variant (capped at 4096) and omits the key otherwise', async () => {
+    const body = await sentBody(flowItem);
+    const data = (body.interactive as any).action.parameters.flow_action_payload
+      .data;
+    expect('passage_text' in data).toBe(false);
+
+    const withPassage = {
+      ...flowItem,
+      flow: {
+        ...flowItem.flow,
+        data: { ...flowItem.flow.data, passage_text: 'प'.repeat(5000) },
+      },
+    };
+    const body2 = await sentBody(withPassage);
+    const data2 = (body2.interactive as any).action.parameters
+      .flow_action_payload.data;
+    expect(data2.passage_text.length).toBe(4096);
+    expect(data2.question_text).toBe('कहानी में कौन था?');
+  });
+
   it('truncates over-limit strings to the Meta component caps at send time', async () => {
     const oversize = {
       ...flowItem,
