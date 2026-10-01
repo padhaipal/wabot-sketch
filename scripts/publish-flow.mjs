@@ -10,7 +10,14 @@
  *   WHATSAPP_BUSINESS_ACCOUNT_ID   WABA id the flow is attached to
  * Optional:
  *   GRAPH_API_VERSION              default v21.0 (matches outbound.service.ts)
- *   FLOW_NAME                      default comprehension-mcq-v1
+ *   FLOW_NAME                      default comprehension-mcq-v1. Names are
+ *                                  unique per WABA and a published flow is
+ *                                  immutable: a re-publish needs a NEW name
+ *                                  (2026-10: comprehension-mcq-v2 — question
+ *                                  TextBody with markdown; set its id as
+ *                                  WHATSAPP_COMPREHENSION_FLOW_ID and
+ *                                  WHATSAPP_COMPREHENSION_FLOW_MARKDOWN=1 on
+ *                                  pp-sketch).
  *   FLOW_VARIANT                   mcq (default) | passage — `passage` adds a
  *                                  TextBody bound to data.passage_text above
  *                                  the question (level 11+ read-in-flow,
@@ -107,8 +114,13 @@ const FLOW_JSON = {
               {
                 type: 'TextBody',
                 text: '${data.question_text}',
-                // Bold question under the passage (Flow JSON ≥ 5.1).
-                ...(WITH_PASSAGE && { markdown: true }),
+                // Markdown on (Flow JSON ≥ 5.1): pp-sketch sends the question
+                // as "**Q: …**" (inbound.utils formatFlowQuestion). Both
+                // variants since comprehension-mcq-v2 (2026-10); the v1 mcq
+                // asset was plain, so pp-sketch keeps that one plain until
+                // WHATSAPP_COMPREHENSION_FLOW_MARKDOWN=1 says the new id is
+                // live.
+                markdown: true,
               },
               {
                 type: 'RadioButtonsGroup',
