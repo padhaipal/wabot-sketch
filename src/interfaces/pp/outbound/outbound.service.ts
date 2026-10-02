@@ -14,6 +14,14 @@ export async function sendMessage(opts: {
     logger.error('PP_INTERNAL_BASE_URL is not configured.');
     return 500;
   }
+  // pp's inbound route is behind its API-key guard; this is wabot's badge
+  // (pp env WABOT_INBOUND_API_KEY). Fail closed: without it pp would 401
+  // every turn, so say so here instead of in pp's rejection log.
+  const apiKey = process.env.PP_INTERNAL_API_KEY;
+  if (!apiKey) {
+    logger.error('PP_INTERNAL_API_KEY is not configured.');
+    return 500;
+  }
 
   const url = `${baseUrl}/wabot/inbound`;
   const payload = {
@@ -25,7 +33,7 @@ export async function sendMessage(opts: {
   try {
     const response = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
       body: JSON.stringify(payload),
     });
 

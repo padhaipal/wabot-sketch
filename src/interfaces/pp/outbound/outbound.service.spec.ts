@@ -1,6 +1,6 @@
 // sendMessage POSTs to PP's internal /wabot/inbound endpoint. We cover every
-// branch: missing env, 2xx success log, 4xx error log, 5xx error log, and
-// fetch-reject (Error vs non-Error) returning 500.
+// branch: missing env (base URL, API key), 2xx success log, 4xx error log,
+// 5xx error log, and fetch-reject (Error vs non-Error) returning 500.
 
 import { Logger } from '@nestjs/common';
 import { sendMessage } from './outbound.service';
@@ -14,6 +14,7 @@ const otel = { traceparent: 'tp' } as unknown as Parameters<
 
 describe('pp/outbound.sendMessage', () => {
   const ORIG_BASE = process.env.PP_INTERNAL_BASE_URL;
+  const ORIG_KEY = process.env.PP_INTERNAL_API_KEY;
   let errorSpy: jest.SpyInstance;
   let logSpy: jest.SpyInstance;
   const globalFetch = global.fetch;
@@ -26,6 +27,7 @@ describe('pp/outbound.sendMessage', () => {
       .spyOn(Logger.prototype, 'log')
       .mockImplementation(() => undefined);
     process.env.PP_INTERNAL_BASE_URL = 'https://pp.test';
+    process.env.PP_INTERNAL_API_KEY = 'wabot-badge';
   });
 
   afterEach(() => {
@@ -37,6 +39,8 @@ describe('pp/outbound.sendMessage', () => {
   afterAll(() => {
     if (ORIG_BASE === undefined) delete process.env.PP_INTERNAL_BASE_URL;
     else process.env.PP_INTERNAL_BASE_URL = ORIG_BASE;
+    if (ORIG_KEY === undefined) delete process.env.PP_INTERNAL_API_KEY;
+    else process.env.PP_INTERNAL_API_KEY = ORIG_KEY;
   });
 
   function makeResponse(status: number): Response {
@@ -52,7 +56,19 @@ describe('pp/outbound.sendMessage', () => {
     );
   });
 
-  it('POSTs <baseUrl>/wabot/inbound with JSON Content-Type + payload', async () => {
+  it('returns 500 + logs error (and never calls pp) when PP_INTERNAL_API_KEY is missing', async () => {
+    delete process.env.PP_INTERNAL_API_KEY;
+    const fetchSpy = jest.fn();
+    global.fetch = fetchSpy as never;
+    const status = await sendMessage({ otel, message });
+    expect(status).toBe(500);
+    expect(errorSpy).toHaveBeenCalledWith(
+      'PP_INTERNAL_API_KEY is not configured.',
+    );
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('POSTs <baseUrl>/wabot/inbound with JSON Content-Type, the x-api-key badge + payload', async () => {
     const fetchSpy = jest.fn().mockResolvedValue(makeResponse(202));
     global.fetch = fetchSpy as never;
     await sendMessage({ otel, message, consecutive: true });
@@ -60,7 +76,10 @@ describe('pp/outbound.sendMessage', () => {
       'https://pp.test/wabot/inbound',
       expect.objectContaining({
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': 'wabot-badge',
+        },
         body: JSON.stringify({ otel, message, consecutive: true }),
       }),
     );
